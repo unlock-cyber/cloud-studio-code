@@ -358,6 +358,26 @@ async function touchWorkspace(
   });
 }
 
+/** Bulk text contents for a project (drives editor tabs + web preview). */
+export const getAllContents = query({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, { projectId }) => {
+    const ws = await peekActiveWorkspace(ctx);
+    if (!ws) throw new Error("WORKSPACE_EXPIRED");
+    const project = await ctx.db.get(projectId);
+    if (!project || project.workspaceId !== ws._id) {
+      throw new Error("Project not found");
+    }
+    const files = await ctx.db
+      .query("files")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect();
+    return files
+      .filter((f) => !f.isFolder && f.content !== undefined)
+      .map((f) => ({ path: f.path, content: f.content as string }));
+  },
+});
+
 export const findByPath = query({
   args: { projectId: v.id("projects"), path: v.string() },
   handler: async (ctx, { projectId, path }) => {

@@ -84,6 +84,7 @@ export function runJs(
   let out = "";
   let err = "";
   let settled = false;
+  let finishRef: ((result: JsRunResult) => void) | null = null;
 
   const promise = new Promise<JsRunResult>((resolve) => {
     const finish = (result: JsRunResult) => {
@@ -95,6 +96,7 @@ export function runJs(
       }
       resolve(result);
     };
+    finishRef = finish;
 
     const timer = window.setTimeout(() => {
       finish({
@@ -133,11 +135,13 @@ export function runJs(
   return {
     promise,
     stop: () => {
-      if (!settled && worker) {
-        worker.terminate();
-        worker = null;
+      if (!settled) {
+        if (worker) {
+          worker.terminate();
+          worker = null;
+        }
         opts.onStderr("[stopped] execution was stopped by the user.");
-        finish({ stdout: out, stderr: err, exitCode: 137 });
+        if (finishRef) finishRef({ stdout: out, stderr: err, exitCode: 137 });
       }
     },
   };
