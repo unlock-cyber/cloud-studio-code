@@ -19,6 +19,8 @@ import logo from "@/assets/logo.svg";
 import { ArrowRight, Loader2, Mail, UserX } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
 interface AuthProps {
   redirectAfterAuth?: string;
@@ -35,8 +37,9 @@ function resolveRedirectAfterAuth(
 }
 
 function Auth({ redirectAfterAuth }: AuthProps = {}) {
-  const { isLoading: authLoading, isAuthenticated, signIn } = useAuth();
+  const { isLoading: authLoading, isAuthenticated, user, signIn } = useAuth();
   const navigate = useNavigate();
+  const ensureWorkspace = useMutation(api.workspaces.getOrCreateWorkspace);
   const [searchParams] = useSearchParams();
   const redirect = resolveRedirectAfterAuth(
     searchParams.get("returnTo"),
@@ -48,10 +51,13 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!authLoading && isAuthenticated) {
+    // Registered users visiting /auth while signed in are bounced to the app,
+    // but guests must NOT be redirected — they come here to upgrade to a
+    // registered account ("Create account" button on the dashboard).
+    if (!authLoading && isAuthenticated && !user?.isAnonymous) {
       navigate(redirect);
     }
-  }, [authLoading, isAuthenticated, navigate, redirect]);
+  }, [authLoading, isAuthenticated, user?.isAnonymous, navigate, redirect]);
   const handleEmailSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsLoading(true);
@@ -97,14 +103,24 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     setIsLoading(true);
     setError(null);
     try {
-      console.log("Attempting anonymous sign in...");
+      if (isAuthenticated) {
+        // A session already exists (e.g. the user returned to /auth while
+        // signed in, or double-clicked). Signing in again with the Anonymous
+        // provider would fail/duplicate — just proceed to the app.
+        navigate(redirect);
+        return;
+      }
       await signIn("anonymous");
-      console.log("Anonymous sign in successful");
+      // Provision the workspace eagerly so the dashboard never flashes
+      // "workspace not found". Best-effort: the dashboard also gates this.
+      await ensureWorkspace().catch(() => undefined);
       navigate(redirect);
     } catch (error) {
       console.error("Guest login error:", error);
-      console.error("Error details:", JSON.stringify(error, null, 2));
-      setError(`Failed to sign in as guest: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setError(
+        `Failed to sign in as guest: ${error instanceof Error ? error.message : "Unknown error"}`,
+      );
+    } finally {
       setIsLoading(false);
     }
   };

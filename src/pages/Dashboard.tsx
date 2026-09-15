@@ -74,6 +74,7 @@ export default function Dashboard() {
   const generateUploadUrl = useMutation(api.importExport.generateUploadUrl);
   const importZip = useAction(api.importExport.importZipAction);
   const touchWs = useMutation(api.workspaces.touch);
+  const ensureWorkspace = useMutation(api.workspaces.getOrCreateWorkspace);
 
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState("web");
@@ -88,6 +89,39 @@ export default function Dashboard() {
     setToast(msg);
     window.setTimeout(() => setToast(null), 3600);
   }, []);
+
+  // ---- Workspace provisioning gate ----
+  // Queries can't create workspaces, so a brand-new guest would see
+  // "workspace not found" until the next mutation ran. Instead, when status
+  // resolves to null (or expired) we create/recreate the workspace from a
+  // mutation. The reactive status query then picks up the new doc.
+  // undefined = still loading (don't provision yet); null or expired = act.
+  const workspaceMissing =
+    workspace !== undefined && (workspace === null || workspace.expiredNow);
+  const workspaceExpired = workspace?.expiredNow ?? false;
+  const [provisioning, setProvisioning] = useState(false);
+  const provisionedRef = useRef(false);
+  useEffect(() => {
+    if (!isAuthenticated || !workspaceMissing || provisioning || provisionedRef.current) return;
+    provisionedRef.current = true;
+    setProvisioning(true);
+    ensureWorkspace()
+      .catch(() => {
+        // Transient failure (network/auth race): allow a retry shortly.
+        window.setTimeout(() => {
+          provisionedRef.current = false;
+        }, 2500);
+      })
+      .finally(() => setProvisioning(false));
+  }, [isAuthenticated, workspaceMissing, provisioning, ensureWorkspace]);
+
+  // Expired workspace: it gets recreated by the gate above (data was already
+  // deleted server-side); surface that honestly instead of showing stale UI.
+  useEffect(() => {
+    if (workspaceExpired && !searchParams.get("expired")) {
+      navigate("/dashboard?expired=1", { replace: true });
+    }
+  }, [workspaceExpired, navigate, searchParams]);
 
   useEffect(() => {
     if (searchParams.get("expired") === "1") {
@@ -222,10 +256,11 @@ export default function Dashboard() {
     );
   }
 
-  if (workspace === null) {
+  if (workspace === null || workspace.expiredNow) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background text-center">
-        <p className="text-sm text-muted-foreground">Workspace not found — reload to recreate it.</p>
+        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">Preparing your workspace…</p>
       </div>
     );
   }
