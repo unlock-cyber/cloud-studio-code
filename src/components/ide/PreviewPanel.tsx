@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, ExternalLink, Globe } from "lucide-react";
+import { RefreshCw, ExternalLink, Globe, X } from "lucide-react";
 
 export type PreviewMessage =
   | { type: "error"; message: string; line?: number; source?: string }
@@ -11,9 +11,10 @@ export type PreviewMessage =
 type Props = {
   html: string;
   onMessage: (msg: PreviewMessage) => void;
+  onClose: () => void;
 };
 
-export function PreviewPanel({ html, onMessage }: Props) {
+export function PreviewPanel({ html, onMessage, onClose }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [lastBuild, setLastBuild] = useState<string | null>(null);
@@ -41,27 +42,33 @@ export function PreviewPanel({ html, onMessage }: Props) {
 
   if (!html) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 bg-[#0D1117] p-6 text-center">
-        <Globe className="size-8 text-zinc-600" />
-        <p className="text-sm text-zinc-400">No web preview</p>
-        <p className="max-w-xs text-xs text-zinc-600">
-          Add an <code className="text-zinc-400">index.html</code> (or any .html file) and run the project to see a live preview here.
+      <div className="flex h-full flex-col items-center justify-center gap-3 bg-background p-6 text-center">
+        <Globe className="size-8 text-muted-foreground/50" />
+        <p className="text-sm text-foreground/80">No web preview</p>
+        <p className="max-w-xs text-xs text-muted-foreground">
+          Add an <code className="text-foreground/80">index.html</code> (or any .html file) and run the project to see a live preview here.
         </p>
+        <Button variant="ghost" size="sm" className="h-7 text-muted-foreground" onClick={onClose}>
+          <X className="size-3.5" /> Close
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full flex-col bg-[#0D1117]">
+    <div className="flex h-full flex-col bg-background">
       <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border/60 px-3">
-        <Globe className="size-3.5 text-zinc-500" />
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Live Preview</span>
+        <Globe className="size-3.5 text-muted-foreground" />
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Live Preview</span>
         <div className="ml-auto flex items-center gap-1">
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-zinc-400" onClick={() => setReloadKey((k) => k + 1)} title="Reload preview">
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={() => setReloadKey((k) => k + 1)} title="Reload preview">
             <RefreshCw className="size-3.5" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-zinc-400" onClick={openExternal} title="Open preview in a new tab">
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={openExternal} title="Open preview in a new tab">
             <ExternalLink className="size-3.5" />
+          </Button>
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={onClose} title="Close preview">
+            <X className="size-3.5" />
           </Button>
         </div>
       </div>

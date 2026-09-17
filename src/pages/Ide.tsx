@@ -27,8 +27,11 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   LayoutPanelLeft,
+  Terminal as TerminalIcon,
   X,
 } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { useTheme } from "@/hooks/use-theme";
 import {
   Dialog,
   DialogContent,
@@ -94,6 +97,21 @@ export default function Ide() {
   const setEntryFile = useMutation(api.projects.setEntryFile);
   const exportZip = useAction(api.importExport.exportProjectZip);
 
+  // ---- App theme (dark default, persisted in localStorage) ----
+  // The editor theme setting stays in sync with the app theme so a reload
+  // (or another device) restores the same look.
+  const { theme, setTheme } = useTheme();
+  const setAppTheme = useCallback(
+    (next: "dark" | "light") => {
+      setTheme(next);
+      updateEditorSettings({ editorTheme: next }).catch(() => undefined);
+    },
+    [setTheme, updateEditorSettings],
+  );
+  const toggleAppTheme = useCallback(() => {
+    setAppTheme(theme === "dark" ? "light" : "dark");
+  }, [theme, setAppTheme]);
+
   // ---- Local editor state ----
   const [tabs, setTabs] = useState<EditorTab[]>([]);
   const [activePath, setActivePath] = useState<string | null>(null);
@@ -103,6 +121,7 @@ export default function Ide() {
   const [previewHtml, setPreviewHtml] = useState<string>("");
   const [previewMessages, setPreviewMessages] = useState<string[]>([]);
   const [previewOpen, setPreviewOpen] = useState(true);
+  const [terminalOpen, setTerminalOpen] = useState(true);
   const [explorerOpen, setExplorerOpen] = useState(true);
   const [commandOpen, setCommandOpen] = useState(false);
   const [newFileDialog, setNewFileDialog] = useState<{ isFolder: boolean } | null>(null);
@@ -348,6 +367,22 @@ export default function Ide() {
   const activeTab = tabs.find((t) => t.path === activePath) ?? null;
   const activeLang = activePath ? (langFromPath(activePath) as LangId) : null;
 
+  // Web preview is only offered when the project actually has a web entry
+  // (an .html entry file, or any .html file the builder can pick up).
+  // Python/SQL/C++ etc. don't render a web page, so the panel stays hidden.
+  const hasWebPreview = useMemo(
+    () =>
+      Boolean(project?.entryFile && /\.html?$/i.test(project.entryFile)) ||
+      allFiles.some((f) => !f.isFolder && /\.html?$/i.test(f.path)),
+    [project?.entryFile, allFiles],
+  );
+  const previewAvailable = hasWebPreview;
+
+  // Auto-hide the preview panel when it isn't applicable to the current file.
+  useEffect(() => {
+    if (!previewAvailable) setPreviewOpen(false);
+  }, [previewAvailable]);
+
   const runCallbacks = useMemo<Parameters<typeof runManager.runSingleFile>[1]>(
     () => ({
       onState: (s) => setRunState(s),
@@ -402,6 +437,10 @@ export default function Ide() {
 
     // Web projects: run the entry HTML in the preview
     if (info.engine === "web-preview") {
+      if (!hasWebPreview) {
+        showToast("No .html entry file — add an HTML file to get a live preview.");
+        return;
+      }
       // Save all dirty tabs first so preview reflects real saved content
       for (const t of tabs.filter((x) => x.draft !== x.content)) {
         await saveFile({ projectId, path: t.path, content: t.draft }).catch(() => undefined);
@@ -454,7 +493,7 @@ export default function Ide() {
       { projectId, path: activePath, content: activeTab.draft, lang },
       runCallbacks,
     );
-  }, [activePath, activeTab, tabs, project?.entryFile, projectId, saveFile, runCallbacks, showToast]);
+  }, [activePath, activeTab, tabs, project?.entryFile, hasWebPreview, projectId, saveFile, runCallbacks, showToast]);
 
   const handleRunRef = useRef(handleRun);
   handleRunRef.current = handleRun;
@@ -631,12 +670,19 @@ export default function Ide() {
       { id: "newfile", label: "New file", group: "Actions", run: () => setNewFileDialog({ isFolder: false }) },
       { id: "newfolder", label: "New folder", group: "Actions", run: () => setNewFileDialog({ isFolder: true }) },
       { id: "preview", label: "Toggle preview panel", group: "View", run: () => setPreviewOpen((v) => !v) },
+      { id: "terminal", label: "Toggle terminal panel", group: "View", run: () => setTerminalOpen((v) => !v) },
       { id: "explorer", label: "Toggle explorer", hint: "Ctrl+B", group: "View", run: () => setExplorerOpen((v) => !v) },
+      {
+        id: "theme",
+        label: theme === "dark" ? "Switch to light mode" : "Switch to dark mode",
+        group: "View",
+        run: toggleAppTheme,
+      },
       { id: "export", label: "Export project as ZIP", group: "Project", run: () => handleExport() },
       { id: "back", label: "Back to dashboard", group: "Project", run: () => navigate("/dashboard") },
     );
     return items;
-  }, [textFiles, openFile, saveActive, activePath, handleExport, navigate]);
+  }, [textFiles, openFile, saveActive, activePath, handleExport, navigate, theme, toggleAppTheme]);
 
   // ---- Workspace expiry watch ----
   const workspaceExpired = workspace?.expiredNow ?? false;
@@ -656,8 +702,8 @@ export default function Ide() {
   // ---- Loading / error states ----
   if (project === undefined || filesRes === undefined) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0D1117]">
-        <div className="flex items-center gap-3 text-zinc-400">
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex items-center gap-3 text-muted-foreground">
           <Loader2 className="size-5 animate-spin" />
           <span className="text-sm">Loading workspace…</span>
         </div>
@@ -667,25 +713,25 @@ export default function Ide() {
 
   if (project === null) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#0D1117] text-center">
-        <p className="text-lg text-zinc-300">Project not found</p>
-        <p className="text-sm text-zinc-500">It may have been deleted, or belongs to another account.</p>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background text-center">
+        <p className="text-lg text-foreground/80">Project not found</p>
+        <p className="text-sm text-muted-foreground">It may have been deleted, or belongs to another account.</p>
         <Button onClick={() => navigate("/dashboard")}>Back to dashboard</Button>
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-[#0D1117] text-zinc-200">
+    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
       {/* Title bar */}
-      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border/60 bg-[#0D1117] px-3">
-        <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-zinc-400" onClick={() => navigate("/dashboard")}>
+      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border/60 bg-background px-3">
+        <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-muted-foreground" onClick={() => navigate("/dashboard")}>
           <ArrowLeft className="size-4" /> Projects
         </Button>
         <div className="mx-1 h-4 w-px bg-border/60" />
-        <span className="text-sm font-medium text-zinc-200">{project.name}</span>
+        <span className="text-sm font-medium">{project.name}</span>
         <Badge variant="secondary" className="ml-1 text-[10px]">{project.language}</Badge>
-        {saving && <Loader2 className="size-3.5 animate-spin text-zinc-500" />}
+        {saving && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
 
         <div className="ml-auto flex items-center gap-1.5">
           {/* RUN button */}
@@ -698,23 +744,24 @@ export default function Ide() {
               <Play className="size-3.5 fill-current" /> Run
             </Button>
           )}
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-zinc-400" onClick={saveActive} title="Save (Ctrl+S)">
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={saveActive} title="Save (Ctrl+S)">
             <Save className="size-4" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-zinc-400" onClick={() => setNewFileDialog({ isFolder: false })} title="New file">
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={() => setNewFileDialog({ isFolder: false })} title="New file">
             <FilePlus2 className="size-4" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-zinc-400" onClick={() => setNewFileDialog({ isFolder: true })} title="New folder">
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={() => setNewFileDialog({ isFolder: true })} title="New folder">
             <FolderPlus className="size-4" />
           </Button>
           <div className="mx-1 h-4 w-px bg-border/60" />
-          <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-zinc-400" onClick={handleExport} disabled={exporting} title="Export as ZIP">
+          <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-muted-foreground" onClick={handleExport} disabled={exporting} title="Export as ZIP">
             {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-4" />} Export
           </Button>
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-zinc-400" onClick={() => setSettingsOpen(true)} title="Editor settings">
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={() => setSettingsOpen(true)} title="Editor settings">
             <Palette className="size-4" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 font-mono text-[11px] text-zinc-500" onClick={() => setCommandOpen(true)}>
+          <ThemeToggle theme={theme} onToggle={toggleAppTheme} />
+          <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 font-mono text-[11px] text-muted-foreground" onClick={() => setCommandOpen(true)}>
             <Command className="size-3" /> K
           </Button>
         </div>
@@ -751,7 +798,7 @@ export default function Ide() {
                   {/* Tabs */}
                   <div className="flex h-9 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border/60 bg-[#0D1117] px-1">
                     {tabs.length === 0 && (
-                      <span className="px-3 text-xs text-zinc-600">No open files — pick one from the explorer</span>
+                      <span className="px-3 text-xs text-muted-foreground/70">No open files — pick one from the explorer</span>
                     )}
                     {tabs.map((t) => {
                       const icon = fileIconMeta(t.path);
@@ -761,8 +808,8 @@ export default function Ide() {
                           key={t.path}
                           className={`group flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-t-md border-b-2 px-2.5 text-xs ${
                             activePath === t.path
-                              ? "border-sky-400 bg-white/5 text-zinc-100"
-                              : "border-transparent text-zinc-500 hover:text-zinc-300"
+                              ? "border-sky-500 bg-foreground/5 text-foreground"
+                              : "border-transparent text-muted-foreground hover:text-foreground/80"
                           }`}
                           onClick={() => openFile(t.path)}
                         >
@@ -770,9 +817,9 @@ export default function Ide() {
                             {icon.label}
                           </span>
                           <span className="max-w-[140px] truncate">{t.path.split("/").pop()}</span>
-                          {dirty && <span className="text-amber-400">●</span>}
+                          {dirty && <span className="text-amber-500 dark:text-amber-400">●</span>}
                           <button
-                            className="ml-1 rounded p-0.5 opacity-0 hover:bg-white/10 group-hover:opacity-100"
+                            className="ml-1 rounded p-0.5 opacity-0 hover:bg-foreground/10 group-hover:opacity-100"
                             onClick={(e) => {
                               e.stopPropagation();
                               closeTab(t.path);
@@ -799,7 +846,8 @@ export default function Ide() {
                             }
                             onSave={saveActive}
                             onRun={() => handleRunRef.current?.()}
-                            theme={workspace?.editorTheme ?? "dark"}
+                            theme={theme}
+                            onThemeToggle={toggleAppTheme}
                             fontSize={workspace?.fontSize ?? 13}
                             wordWrap={workspace?.wordWrap ?? false}
                             onFontSizeChange={(size) =>
@@ -810,16 +858,20 @@ export default function Ide() {
                             }
                           />
                         ) : (
-                          <div className="flex h-full items-center justify-center text-sm text-zinc-600">
+                          <div className="flex h-full items-center justify-center text-sm text-muted-foreground/70">
                             Select a file to start editing
                           </div>
                         )}
                       </Panel>
-                      {previewOpen && (
+                      {previewAvailable && previewOpen && (
                         <>
                           <PanelResizeHandle className="w-px bg-border/60 data-[resize-handle-active]:bg-sky-500" />
                           <Panel defaultSize={40} minSize={20}>
-                            <PreviewPanel html={previewHtml} onMessage={handlePreviewMessage} />
+                            <PreviewPanel
+                              html={previewHtml}
+                              onMessage={handlePreviewMessage}
+                              onClose={() => setPreviewOpen(false)}
+                            />
                           </Panel>
                         </>
                       )}
@@ -828,41 +880,51 @@ export default function Ide() {
                 </div>
               </Panel>
 
-              <PanelResizeHandle className="h-px bg-border/60 data-[resize-handle-active]:bg-sky-500" />
+              {terminalOpen && (
+                <>
+                  <PanelResizeHandle className="h-px bg-border/60 data-[resize-handle-active]:bg-sky-500" />
 
-              {/* Terminal */}
-              <Panel defaultSize={35} minSize={10}>
-                <TerminalPanel
-                  lines={terminalLines}
-                  runState={runState}
-                  onClear={() => setTerminalLines([])}
-                  onStop={handleStop}
-                  onRerun={handleRerun}
-                  canRerun={lastRunTarget !== null}
-                />
-              </Panel>
+                  {/* Terminal */}
+                  <Panel defaultSize={35} minSize={10}>
+                    <TerminalPanel
+                      lines={terminalLines}
+                      runState={runState}
+                      onClear={() => setTerminalLines([])}
+                      onStop={handleStop}
+                      onRerun={handleRerun}
+                      canRerun={lastRunTarget !== null}
+                      onClose={() => setTerminalOpen(false)}
+                    />
+                  </Panel>
+                </>
+              )}
             </PanelGroup>
           </Panel>
         </PanelGroup>
       </div>
 
       {/* Status bar */}
-      <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-border/60 bg-[#0D1117] px-3 text-[11px] text-zinc-500">
-        <button className="flex items-center gap-1 hover:text-zinc-300" onClick={() => setExplorerOpen((v) => !v)}>
+      <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-border/60 bg-background px-3 text-[11px] text-muted-foreground">
+        <button className="flex items-center gap-1 hover:text-foreground" onClick={() => setExplorerOpen((v) => !v)}>
           {explorerOpen ? <PanelLeftClose className="size-3.5" /> : <PanelLeftOpen className="size-3.5" />} Explorer
         </button>
-        <button className="flex items-center gap-1 hover:text-zinc-300" onClick={() => setPreviewOpen((v) => !v)}>
-          <LayoutPanelLeft className="size-3.5" /> Preview
+        <button className="flex items-center gap-1 hover:text-foreground" onClick={() => setTerminalOpen((v) => !v)}>
+          <TerminalIcon className="size-3.5" /> Terminal
         </button>
+        {previewAvailable && (
+          <button className="flex items-center gap-1 hover:text-foreground" onClick={() => setPreviewOpen((v) => !v)}>
+            <LayoutPanelLeft className="size-3.5" /> Preview
+          </button>
+        )}
         {activePath && (
           <span className="truncate">
             {activePath} · {activeLang ? LANGUAGES[activeLang].label : "Text"}
           </span>
         )}
         <span className="ml-auto flex items-center gap-3">
-          {pyodideState === "loading" && <span className="text-sky-400">Python runtime loading…</span>}
-          {pyodideState === "ready" && <span className="text-emerald-500">Python ready</span>}
-          {pyodideState === "error" && <span className="text-amber-400">Python runtime unavailable</span>}
+          {pyodideState === "loading" && <span className="text-sky-500 dark:text-sky-400">Python runtime loading…</span>}
+          {pyodideState === "ready" && <span className="text-emerald-600 dark:text-emerald-500">Python ready</span>}
+          {pyodideState === "error" && <span className="text-amber-600 dark:text-amber-400">Python runtime unavailable</span>}
           <span className="flex items-center gap-1.5">
             <span className={`size-1.5 rounded-full ${storageWarn ? "bg-amber-400" : "bg-emerald-500"}`} />
             {workspace ? `${formatBytesClient(workspace.usedBytes)} / ${formatBytesClient(workspace.storageLimitBytes)}` : "…"}
@@ -907,21 +969,21 @@ export default function Ide() {
           </DialogHeader>
           <div className="space-y-4 py-1">
             <div className="flex items-center justify-between">
-              <span className="text-sm">Editor theme</span>
+              <span className="text-sm">App & editor theme</span>
               <div className="flex gap-1">
                 <Button
                   size="sm"
-                  variant={(workspace?.editorTheme ?? "dark") === "dark" ? "default" : "ghost"}
+                  variant={theme === "dark" ? "default" : "ghost"}
                   className="h-7 w-7 p-0"
-                  onClick={() => updateEditorSettings({ editorTheme: "dark" })}
+                  onClick={() => setAppTheme("dark")}
                 >
                   <Moon className="size-3.5" />
                 </Button>
                 <Button
                   size="sm"
-                  variant={(workspace?.editorTheme ?? "dark") === "light" ? "default" : "ghost"}
+                  variant={theme === "light" ? "default" : "ghost"}
                   className="h-7 w-7 p-0"
-                  onClick={() => updateEditorSettings({ editorTheme: "light" })}
+                  onClick={() => setAppTheme("light")}
                 >
                   <Sun className="size-3.5" />
                 </Button>

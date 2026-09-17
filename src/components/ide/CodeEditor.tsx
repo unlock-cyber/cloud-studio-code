@@ -7,7 +7,7 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { load as yamlLoad } from "js-yaml";
 import { Button } from "@/components/ui/button";
-import { WrapText, Minus, Plus } from "lucide-react";
+import { WrapText, Minus, Plus, Sun, Moon } from "lucide-react";
 
 export type EditorTab = {
   path: string;
@@ -21,6 +21,7 @@ type Props = {
   onSave: () => void;
   onRun: () => void;
   theme: "dark" | "light";
+  onThemeToggle: () => void;
   fontSize: number;
   wordWrap: boolean;
   onFontSizeChange: (size: number) => void;
@@ -33,6 +34,7 @@ export function CodeEditor({
   onSave,
   onRun,
   theme,
+  onThemeToggle,
   fontSize,
   wordWrap,
   onFontSizeChange,
@@ -128,27 +130,36 @@ export function CodeEditor({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-2 border-b border-border/60 bg-[#0D1117] px-2 py-1">
-        <div className="flex items-center gap-1 text-[11px] text-zinc-500">
-          <span className="font-medium text-zinc-300">{tab.path.split("/").pop()}</span>
-          {dirty && <span className="text-amber-400">●</span>}
-          <span className="mx-1 text-zinc-700">|</span>
+      <div className="flex items-center gap-2 border-b border-border/60 bg-background px-2 py-1">
+        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          <span className="font-medium text-foreground/90">{tab.path.split("/").pop()}</span>
+          {dirty && <span className="text-amber-500 dark:text-amber-400">●</span>}
+          <span className="mx-1 text-border">|</span>
           <span>{lang.toUpperCase()}</span>
         </div>
         <div className="ml-auto flex items-center gap-1">
           <Button
             variant="ghost"
             size="sm"
-            className={`h-7 gap-1 px-2 text-xs ${wordWrap ? "text-sky-400" : "text-zinc-500"}`}
+            className="h-7 w-7 p-0 text-muted-foreground"
+            onClick={onThemeToggle}
+            title={theme === "dark" ? "Switch editor + UI to light mode" : "Switch editor + UI to dark mode"}
+          >
+            {theme === "dark" ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`h-7 gap-1 px-2 text-xs ${wordWrap ? "text-sky-600 dark:text-sky-400" : "text-muted-foreground"}`}
             onClick={onWordWrapToggle}
           >
             <WrapText className="size-3.5" /> Wrap
           </Button>
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-zinc-500" onClick={() => onFontSizeChange(fontSize - 1)}>
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={() => onFontSizeChange(fontSize - 1)}>
             <Minus className="size-3.5" />
           </Button>
-          <span className="text-xs text-zinc-500 tabular-nums">{fontSize}px</span>
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-zinc-500" onClick={() => onFontSizeChange(fontSize + 1)}>
+          <span className="text-xs text-muted-foreground tabular-nums">{fontSize}px</span>
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={() => onFontSizeChange(fontSize + 1)}>
             <Plus className="size-3.5" />
           </Button>
         </div>
@@ -158,7 +169,7 @@ export function CodeEditor({
           path={tab.path}
           language={monacoLang(lang)}
           value={value}
-          theme={theme === "dark" ? "ide-dark" : "vs"}
+          theme={theme === "dark" ? "ide-dark" : "ide-light"}
           onMount={handleMount}
           onChange={(v: string | undefined) => onChange(v ?? "")}
           options={{

@@ -95,7 +95,7 @@ export function FileExplorer({
     const row = (
       <div
         className={`group flex h-7 cursor-pointer items-center gap-1.5 rounded-md pr-2 text-[13px] ${
-          isActive ? "bg-sky-500/15 text-sky-200" : "text-zinc-300 hover:bg-white/5"
+          isActive ? "bg-sky-500/15 text-sky-700 dark:text-sky-200" : "text-foreground/80 hover:bg-foreground/5"
         }`}
         style={{ paddingLeft: 6 + depth * 12 }}
         onClick={() => (node.isFolder ? toggleFolder(node.path) : onOpenFile(node.path))}
@@ -103,14 +103,14 @@ export function FileExplorer({
         {node.isFolder ? (
           <>
             {isCollapsed ? (
-              <ChevronRight className="size-3.5 shrink-0 text-zinc-500" />
+              <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
             ) : (
-              <ChevronDown className="size-3.5 shrink-0 text-zinc-500" />
+              <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
             )}
             {isCollapsed ? (
-              <Folder className="size-3.5 shrink-0 text-sky-400/80" />
+              <Folder className="size-3.5 shrink-0 text-sky-500 dark:text-sky-400/80" />
             ) : (
-              <FolderOpen className="size-3.5 shrink-0 text-sky-400/80" />
+              <FolderOpen className="size-3.5 shrink-0 text-sky-500 dark:text-sky-400/80" />
             )}
             <span className="truncate">{node.name}</span>
           </>
@@ -124,8 +124,8 @@ export function FileExplorer({
                 {icon.label}
               </span>
             </span>
-            <span className={`truncate ${isDirty ? "text-amber-300" : ""}`}>{node.name}</span>
-            {isDirty && <span className="text-[10px] text-amber-400">●</span>}
+            <span className={`truncate ${isDirty ? "text-amber-600 dark:text-amber-300" : ""}`}>{node.name}</span>
+            {isDirty && <span className="text-[10px] text-amber-500 dark:text-amber-400">●</span>}
           </>
         )}
       </div>
@@ -153,7 +153,7 @@ export function FileExplorer({
               </ContextMenuItem>
             )}
             <ContextMenuSeparator />
-            <ContextMenuItem className="text-red-400 focus:text-red-300" onClick={() => setDeleting({ path: node.path, isFolder: node.isFolder })}>
+            <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleting({ path: node.path, isFolder: node.isFolder })}>
               <Trash2 className="mr-2 size-3.5" /> Delete
             </ContextMenuItem>
           </ContextMenuContent>
@@ -166,21 +166,21 @@ export function FileExplorer({
   };
 
   return (
-    <div className="flex h-full flex-col bg-[#0D1117]">
+    <div className="flex h-full flex-col bg-background">
       <div className="flex h-9 shrink-0 items-center gap-1 border-b border-border/60 px-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Explorer</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Explorer</span>
         <div className="ml-auto flex items-center gap-0.5">
-          <Button variant="ghost" size="sm" className="size-7 p-0 text-zinc-400" title="New file" onClick={() => onCreate(null, false)}>
+          <Button variant="ghost" size="sm" className="size-7 p-0 text-muted-foreground" title="New file" onClick={() => onCreate(null, false)}>
             <Plus className="size-4" />
           </Button>
-          <Button variant="ghost" size="sm" className="size-7 p-0 text-zinc-400" title="New folder" onClick={() => onCreate(null, true)}>
+          <Button variant="ghost" size="sm" className="size-7 p-0 text-muted-foreground" title="New folder" onClick={() => onCreate(null, true)}>
             <FolderPlusIcon />
           </Button>
         </div>
       </div>
       <div className="px-2 pb-1 pt-1.5">
         <div className="relative">
-          <Search className="absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-zinc-600" />
+          <Search className="absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -191,7 +191,7 @@ export function FileExplorer({
       </div>
       <div className="min-h-0 flex-1 overflow-auto px-1.5 pb-2">
         {filteredTree.length === 0 ? (
-          <p className="px-2 py-6 text-center text-xs text-zinc-600">
+          <p className="px-2 py-6 text-center text-xs text-muted-foreground/70">
             {query ? "No files match your search." : "No files yet — create one with + above."}
           </p>
         ) : (

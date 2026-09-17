@@ -17,12 +17,30 @@ export type Monaco = typeof MonacoNs;
 
 let themeDefined = false;
 
-/** Register the custom IDE dark theme once Monaco is available. */
+/** Register the custom IDE themes once Monaco is available. */
 export function defineIdeTheme(monaco: Monaco) {
   if (themeDefined) {
     return;
   }
   themeDefined = true;
+  monaco.editor.defineTheme("ide-light", {
+    base: "vs",
+    inherit: true,
+    rules: [
+      { token: "comment", foreground: "6A737D", fontStyle: "italic" },
+      { token: "keyword", foreground: "CF222E", fontStyle: "bold" },
+      { token: "string", foreground: "0A3069" },
+      { token: "number", foreground: "0550AE" },
+      { token: "type", foreground: "953800" },
+    ],
+    colors: {
+      "editor.background": "#FFFFFF",
+      "editorGutter.background": "#FFFFFF",
+      "editor.lineHighlightBackground": "#F6F8FA",
+      "editorLineNumber.foreground": "#8C959F",
+      "editorCursor.foreground": "#0969DA",
+    },
+  });
   monaco.editor.defineTheme("ide-dark", {
     base: "vs-dark",
     inherit: true,
@@ -44,5 +62,5 @@ export function defineIdeTheme(monaco: Monaco) {
 }
 
 export function setMonacoTheme(monaco: Monaco, theme: "dark" | "light") {
-  monaco.editor.setTheme(theme === "dark" ? "ide-dark" : "vs");
+  monaco.editor.setTheme(theme === "dark" ? "ide-dark" : "ide-light");
 }

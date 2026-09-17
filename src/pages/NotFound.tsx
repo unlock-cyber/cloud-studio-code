@@ -1,13 +1,20 @@
 import { motion } from "framer-motion";
+import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export default function NotFound() {
+  const navigate = useNavigate();
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
-      className="min-h-screen flex flex-col"
+      className="min-h-screen flex flex-col bg-background text-foreground"
     >
+      <div className="flex justify-end p-4">
+        <ThemeToggle />
+      </div>
 
       
       {/* Main Content */}
@@ -15,8 +22,11 @@ export default function NotFound() {
         <div className="max-w-5xl mx-auto relative px-4">
           <div className="flex items-center justify-center min-h-[200px]">
             <div className="text-center">
-              <h1 className="text-4xl font-bold text-gray-900 mb-4">404</h1>
-              <p className="text-lg text-gray-600">Page Not Found</p>
+              <h1 className="text-4xl font-bold mb-4">404</h1>
+              <p className="text-lg text-muted-foreground">Page Not Found</p>
+              <Button className="mt-6" onClick={() => navigate("/")}>
+                Back to home
+              </Button>
             </div>
           </div>
         </div>

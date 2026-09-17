@@ -42,6 +42,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { formatBytesClient, formatDate } from "@/lib/clientHelpers";
 import { TEMPLATE_PICKER } from "@/lib/projectTemplates";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 const TEMPLATE_META_LABEL: Record<string, string> = {
   blank: "Blank",
@@ -285,6 +286,7 @@ export default function Dashboard() {
               {isGuest ? "Guest workspace" : "Registered workspace"}
             </Badge>
             {user?.email && <span className="hidden text-xs text-muted-foreground sm:inline">{user.email}</span>}
+            <ThemeToggle />
             {!isGuest && (
               <Button variant="ghost" size="sm" className="h-8 gap-1.5" onClick={() => signOut()}>
                 Sign out
