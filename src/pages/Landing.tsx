@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
@@ -12,11 +13,17 @@ import {
   Languages,
   Clock,
   HardDrive,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNavigate } from "react-router";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useAuthActions } from "@convex-dev/auth/react";
+import { useConvexAuth } from "convex/react";
+import { toast } from "sonner";
 
 const FEATURES = [
   {
@@ -68,6 +75,65 @@ const LANGS = [
 
 export default function Landing() {
   const navigate = useNavigate();
+  const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
+  const user = useQuery(api.users.currentUser);
+  const { signIn } = useAuthActions();
+  const [guestBusy, setGuestBusy] = useState(false);
+
+  // Auth-aware CTAs (BUG 4): a signed-in registered user or an existing guest
+  // session gets a direct "Go to dashboard" action instead of Sign in.
+  // undefined user = still loading; null = signed out; doc = signed in.
+  const userLoaded = user !== undefined;
+  const isGuest = userLoaded && user !== null && !!user.isAnonymous;
+  const isRegistered = userLoaded && user !== null && !user.isAnonymous;
+  const showDashAction = userLoaded && isAuthenticated && (isGuest || isRegistered);
+
+  // BUG 1: "Continue as guest" signs in anonymously from here and navigates
+  // straight to the dashboard — no /auth round-trip.
+  const handleGuest = async () => {
+    if (guestBusy) return;
+    setGuestBusy(true);
+    try {
+      if (isAuthenticated) {
+        navigate("/dashboard");
+        return;
+      }
+      await signIn("anonymous");
+      navigate("/dashboard");
+    } catch (err) {
+      console.error("Guest sign-in failed:", err);
+      toast.error("Could not start a guest session. Please try again.");
+      setGuestBusy(false);
+    }
+  };
+
+  const guestButton = (
+    <Button
+      size="lg"
+      variant="outline"
+      className="gap-2 border-border bg-foreground/5 hover:bg-foreground/10"
+      onClick={handleGuest}
+      disabled={guestBusy}
+    >
+      {guestBusy ? (
+        <>
+          <Loader2 className="size-4 animate-spin" /> Starting…
+        </>
+      ) : (
+        "Continue as guest"
+      )}
+    </Button>
+  );
+
+  const dashButton = (
+    <Button
+      size="lg"
+      className="gap-2 bg-emerald-600 text-white hover:bg-emerald-500"
+      onClick={() => navigate("/dashboard")}
+    >
+      Go to dashboard <ArrowRight className="size-4" />
+    </Button>
+  );
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -79,13 +145,26 @@ export default function Landing() {
             <span className="font-semibold">Cloud Code Studio</span>
           </div>
           <nav className="ml-auto flex items-center gap-1">
-            <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-foreground" onClick={() => navigate("/auth?returnTo=/dashboard")}>
-              Sign in
-            </Button>
-            <ThemeToggle />
-            <Button size="sm" className="h-8 bg-emerald-600 text-white hover:bg-emerald-500" onClick={() => navigate("/auth?returnTo=/dashboard")}>
-              Start coding
-            </Button>
+            {showDashAction ? (
+              <>
+                <Badge variant={isGuest ? "secondary" : "default"} className="mr-1 text-[11px]">
+                  {isGuest ? "Guest session" : "Signed in"}
+                </Badge>
+                <Button size="sm" className="h-8 bg-emerald-600 text-white hover:bg-emerald-500" onClick={() => navigate("/dashboard")}>
+                  Go to dashboard
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-foreground" onClick={() => navigate("/auth?returnTo=/dashboard")}>
+                  Sign in
+                </Button>
+                <ThemeToggle />
+                <Button size="sm" className="h-8 bg-emerald-600 text-white hover:bg-emerald-500" onClick={() => navigate("/auth?returnTo=/dashboard")}>
+                  Start coding
+                </Button>
+              </>
+            )}
           </nav>
         </div>
       </header>
@@ -112,12 +191,21 @@ export default function Landing() {
               Cloud Code Studio compiles and executes your code for real — Python, C++, Java, TypeScript, SQL and live web previews — in sandboxed runtimes. Projects, files and sessions persist in the cloud.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Button size="lg" className="gap-2 bg-emerald-600 text-white hover:bg-emerald-500" onClick={() => navigate("/auth?returnTo=/dashboard")}>
-                Start coding free <ArrowRight className="size-4" />
-              </Button>
-              <Button size="lg" variant="outline" className="gap-2 border-border bg-foreground/5 hover:bg-foreground/10" onClick={() => navigate("/auth?returnTo=/dashboard")}>
-                Continue as guest
-              </Button>
+              {showDashAction ? (
+                <>
+                  {dashButton}
+                  <span className="text-sm text-muted-foreground">
+                    You&apos;re signed in — your workspace is ready.
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Button size="lg" className="gap-2 bg-emerald-600 text-white hover:bg-emerald-500" onClick={() => navigate("/auth?returnTo=/dashboard")}>
+                    Start coding free <ArrowRight className="size-4" />
+                  </Button>
+                  {guestButton}
+                </>
+              )}
             </div>
             <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
               <span className="flex items-center gap-1.5"><HardDrive className="size-3.5" /> 50 MB guest · 150 MB registered</span>
@@ -199,9 +287,15 @@ export default function Landing() {
           <p className="mt-3 text-sm text-muted-foreground">
             Start instantly as a guest — no signup wall. Create an account to keep your workspace for 24 hours of inactivity.
           </p>
-          <Button size="lg" className="mt-6 gap-2 bg-emerald-600 text-white hover:bg-emerald-500" onClick={() => navigate("/auth?returnTo=/dashboard")}>
-            <Play className="size-4 fill-current" /> Launch the IDE
-          </Button>
+          {showDashAction ? (
+            <Button size="lg" className="mt-6 gap-2 bg-emerald-600 text-white hover:bg-emerald-500" onClick={() => navigate("/dashboard")}>
+              <Play className="size-4 fill-current" /> Open your workspace
+            </Button>
+          ) : (
+            <Button size="lg" className="mt-6 gap-2 bg-emerald-600 text-white hover:bg-emerald-500" onClick={() => navigate("/auth?returnTo=/dashboard")}>
+              <Play className="size-4 fill-current" /> Launch the IDE
+            </Button>
+          )}
         </div>
       </section>
 

@@ -96,10 +96,13 @@ export function CodeEditor({
       if (!last || last.text !== ">" || last.rangeLength !== 0) return;
 
       // Tokenize with the language's own grammar and mask strings/comments.
+      // NOTE: Monaco's .d.ts types editor.tokenize as Token[][] ({offset,type}),
+      // but the runtime actually returns Monarch tokens ({startIndex,scopes}) —
+      // a long-standing typings inconsistency. Cast to the real shape.
       const { lines, lineStarts } = toLines(value);
       let tokens: Array<Array<{ startIndex: number; scopes: string }>>;
       try {
-        tokens = m.editor.tokenize(value, mLang);
+        tokens = m.editor.tokenize(value, mLang) as unknown as typeof tokens;
       } catch {
         return;
       }

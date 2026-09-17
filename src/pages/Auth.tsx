@@ -7,8 +7,6 @@ import { BrandMark } from "@/components/BrandMark";
 import { TerminalSquare, Check } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
 
 interface AuthProps {
   redirectAfterAuth?: string;
@@ -43,7 +41,6 @@ function CloudLines() {
 function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const { isLoading: authLoading, isAuthenticated, user, signIn } = useAuth();
   const navigate = useNavigate();
-  const ensureWorkspace = useMutation(api.workspaces.getOrCreateWorkspace);
   const [searchParams] = useSearchParams();
   const redirect = resolveRedirectAfterAuth(searchParams.get("returnTo"), redirectAfterAuth);
   const [step, setStep] = useState<"signIn" | { email: string }>("signIn");
@@ -87,7 +84,12 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     try {
       const formData = new FormData(event.currentTarget);
       await signIn("email-otp", formData);
-      navigate(redirect);
+      // OTP verification creates a fresh registered user/session — it does
+      // not link to the previous anonymous session. Always enter the
+      // authenticated home instead of honoring a `returnTo` captured while
+      // the user was a guest (that path points into the abandoned guest
+      // workspace and would be inaccessible).
+      navigate("/dashboard");
     } catch (error) {
       console.error("OTP verification error:", error);
       setError("The verification code you entered is incorrect.");
@@ -108,16 +110,15 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
         return;
       }
       await signIn("anonymous");
-      // Provision the workspace eagerly so the dashboard never flashes
-      // "workspace not found". Best-effort: the dashboard also gates this.
-      await ensureWorkspace().catch(() => undefined);
+      // Navigate the moment the session exists. Workspace provisioning is
+      // handled by the dashboard's own gate — awaiting it here only delays
+      // the transition (and the dashboard covers transient failures).
       navigate(redirect);
     } catch (error) {
       console.error("Guest login error:", error);
       setError(
         `Failed to sign in as guest: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
-    } finally {
       setIsLoading(false);
     }
   };
