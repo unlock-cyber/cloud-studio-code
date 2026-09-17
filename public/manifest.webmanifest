@@ -1,15 +1,21 @@
 {
-  "name": "freebuff.com application",
-  "short_name": "freebuff.com",
-  "description": "freebuff.com application",
+  "name": "Cloud Code Studio",
+  "short_name": "Cloud Code",
+  "description": "A real cloud IDE — write, run and ship code without leaving the tab.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "background_color": "#0D1117",
+  "theme_color": "#0D1117",
   "icons": [
     {
-      "src": "/logo.png",
+      "src": "/favicon.svg",
       "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
       "type": "image/png",
       "purpose": "any maskable"
     }

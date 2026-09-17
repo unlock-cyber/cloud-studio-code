@@ -1,23 +1,10 @@
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from "@/components/ui/input-otp";
-
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useAuth } from "@/hooks/use-auth";
-import logo from "@/assets/logo.svg";
-import { ArrowRight, Loader2, Mail, UserX } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { BrandMark } from "@/components/BrandMark";
+import { TerminalSquare, Check } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useMutation } from "convex/react";
@@ -27,14 +14,30 @@ interface AuthProps {
   redirectAfterAuth?: string;
 }
 
-function resolveRedirectAfterAuth(
-  returnTo: string | null,
-  fallback = "/dashboard",
-) {
+function resolveRedirectAfterAuth(returnTo: string | null, fallback = "/dashboard") {
   if (returnTo?.startsWith("/") && !returnTo.startsWith("//")) {
     return returnTo;
   }
   return fallback;
+}
+
+// Copy for the "real IDE" feature column.
+const PROOF_POINTS = [
+  "Python, C++, Java & TypeScript really compile and run",
+  "Live web preview for HTML/CSS/JS projects",
+  "Real SQLite — your tables persist per project",
+  "Sandboxed, isolated and quota-enforced server-side",
+];
+
+function CloudLines() {
+  // Decorative cloud silhouettes echoing the favicon tile, drawn with CSS.
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+      <div className="absolute -top-24 -left-16 size-[420px] rounded-full bg-emerald-500/[0.07] blur-3xl" />
+      <div className="absolute top-1/3 -right-24 size-[380px] rounded-full bg-sky-500/[0.06] blur-3xl" />
+      <div className="absolute -bottom-32 left-1/4 size-[460px] rounded-full bg-emerald-400/[0.05] blur-3xl" />
+    </div>
+  );
 }
 
 function Auth({ redirectAfterAuth }: AuthProps = {}) {
@@ -42,10 +45,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const navigate = useNavigate();
   const ensureWorkspace = useMutation(api.workspaces.getOrCreateWorkspace);
   const [searchParams] = useSearchParams();
-  const redirect = resolveRedirectAfterAuth(
-    searchParams.get("returnTo"),
-    redirectAfterAuth,
-  );
+  const redirect = resolveRedirectAfterAuth(searchParams.get("returnTo"), redirectAfterAuth);
   const [step, setStep] = useState<"signIn" | { email: string }>("signIn");
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -59,6 +59,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       navigate(redirect);
     }
   }, [authLoading, isAuthenticated, user?.isAnonymous, navigate, redirect]);
+
   const handleEmailSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setIsLoading(true);
@@ -86,16 +87,11 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     try {
       const formData = new FormData(event.currentTarget);
       await signIn("email-otp", formData);
-
-      console.log("signed in");
-
       navigate(redirect);
     } catch (error) {
       console.error("OTP verification error:", error);
-
       setError("The verification code you entered is incorrect.");
       setIsLoading(false);
-
       setOtp("");
     }
   };
@@ -126,107 +122,141 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     }
   };
 
-  return (
-    <div className="min-h-screen flex flex-col">
+  const navigateHome = () => navigate("/");
 
-      
-      {/* Theme toggle */}
-      <div className="flex justify-end p-4">
-        <ThemeToggle />
-      </div>
-      {/* Auth Content */}
-      <div className="flex-1 flex items-center justify-center">
-        <div className="flex items-center justify-center h-full flex-col">
-        <Card className="min-w-[350px] pb-0 border shadow-md">
-          {step === "signIn" ? (
-            <>
-              <CardHeader className="text-center">
-              <div className="flex justify-center">
-                    <img
-                      src={logo}
-                      alt="Lock Icon"
-                      width={64}
-                      height={64}
-                      className="rounded-lg mb-4 mt-4 cursor-pointer"
-                      onClick={() => navigate("/")}
-                    />
+  return (
+    <div className="relative flex min-h-screen flex-col bg-background text-foreground">
+      <CloudLines />
+
+      {/* Top bar */}
+      <header className="relative z-10 flex h-14 items-center justify-between px-4 sm:px-6">
+        <button
+          type="button"
+          onClick={navigateHome}
+          className="flex items-center gap-2 rounded-md py-1 pr-2 text-sm font-semibold transition-colors hover:text-emerald-600 dark:hover:text-emerald-400"
+        >
+          <TerminalSquare className="size-5 text-emerald-500 dark:text-emerald-400" />
+          Cloud Code Studio
+        </button>
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 text-muted-foreground hover:text-foreground"
+            onClick={navigateHome}
+          >
+            Back to home
+          </Button>
+        </div>
+      </header>
+
+      {/* Main split layout */}
+      <main className="relative z-10 flex flex-1 items-center justify-center px-4 py-10">
+        <div className="grid w-full max-w-4xl items-center gap-10 lg:grid-cols-2">
+          {/* Brand / proof column */}
+          <div className="hidden lg:block">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-300">
+              <span className="relative flex size-2">
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-500 opacity-60" />
+                <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+              </span>
+              Run code in the cloud — no setup
+            </div>
+            <h1 className="mt-4 text-3xl font-bold leading-tight tracking-tight">
+              Your workspaces, ready
+              <span className="text-emerald-600 dark:text-emerald-400"> where you left them.</span>
+            </h1>
+            <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
+              Sign in to keep projects for 24 hours of inactivity — or jump straight in as a guest
+              with a 1-hour scratch workspace.
+            </p>
+            <ul className="mt-6 space-y-3">
+              {PROOF_POINTS.map((point) => (
+                <li key={point} className="flex items-start gap-2.5 text-sm text-foreground/90">
+                  <Check className="mt-0.5 size-4 shrink-0 text-emerald-500 dark:text-emerald-400" />
+                  {point}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Form column */}
+          <div className="mx-auto w-full max-w-sm">
+            {/* Sign in: email */}
+            {step === "signIn" ? (
+              <div className="rounded-xl border border-border/80 bg-card p-6 shadow-xl shadow-black/5">
+                <div className="flex flex-col items-center text-center">
+                  <BrandMark size={56} className="mb-4 cursor-pointer rounded-xl" onClick={navigateHome} />
+                  <h2 className="text-lg font-semibold">Sign in to Cloud Code Studio</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    We&apos;ll email you a one-time code — no password needed.
+                  </p>
+                </div>
+                <form onSubmit={handleEmailSubmit} className="mt-6">
+                  <label htmlFor="email" className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                    Email address
+                  </label>
+                  <Input
+                    id="email"
+                    name="email"
+                    placeholder="name@example.com"
+                    type="email"
+                    autoComplete="email"
+                    disabled={isLoading}
+                    required
+                  />
+                  {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
+                  <Button
+                    type="submit"
+                    className="mt-4 w-full gap-2 bg-emerald-600 text-white hover:bg-emerald-500"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <>
+                        <span className="size-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+                        Sending code…
+                      </>
+                    ) : (
+                      "Continue with email"
+                    )}
+                  </Button>
+                </form>
+                <div className="my-5 flex items-center gap-3">
+                  <span className="h-px flex-1 bg-border" />
+                  <span className="text-[11px] uppercase tracking-wide text-muted-foreground">or</span>
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleGuestLogin}
+                  disabled={isLoading}
+                >
+                  Continue as guest
+                </Button>
+                <p className="mt-4 text-center text-[11px] leading-relaxed text-muted-foreground">
+                  Guest workspaces hold 50 MB and expire after 1 hour of inactivity. Registered
+                  workspaces hold 150 MB and last 24 hours.
+                </p>
+              </div>
+            ) : (
+              /* Verify OTP */
+              <div className="rounded-xl border border-border/80 bg-card p-6 shadow-xl shadow-black/5">
+                <div className="flex flex-col items-center text-center">
+                  <div className="mb-4 flex size-14 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    <MailIcon />
                   </div>
-                <CardTitle className="text-xl">Get Started</CardTitle>
-                <CardDescription>
-                  Enter your email to log in or sign up
-                </CardDescription>
-              </CardHeader>
-              <form onSubmit={handleEmailSubmit}>
-                <CardContent>
-                  
-                  <div className="relative flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        name="email"
-                        placeholder="name@example.com"
-                        type="email"
-                        className="pl-9"
-                        disabled={isLoading}
-                        required
-                      />
-                    </div>
-                    <Button
-                      type="submit"
-                      variant="outline"
-                      size="icon"
-                      disabled={isLoading}
-                    >
-                      {isLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <ArrowRight className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                  {error && (
-                    <p className="mt-2 text-sm text-red-500">{error}</p>
-                  )}
-                  
-                  <div className="mt-4">
-                    <div className="relative">
-                      <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t" />
-                      </div>
-                      <div className="relative flex justify-center text-xs uppercase">
-                        <span className="bg-background px-2 text-muted-foreground">
-                          Or
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full mt-4"
-                      onClick={handleGuestLogin}
-                      disabled={isLoading}
-                    >
-                      <UserX className="mr-2 h-4 w-4" />
-                      Continue as Guest
-                    </Button>
-                  </div>
-                </CardContent>
-              </form>
-            </>
-          ) : (
-            <>
-              <CardHeader className="text-center mt-4">
-                <CardTitle>Check your email</CardTitle>
-                <CardDescription>
-                  We've sent a code to {step.email}
-                </CardDescription>
-              </CardHeader>
-              <form onSubmit={handleOtpSubmit}>
-                <CardContent className="pb-4">
+                  <h2 className="text-lg font-semibold">Check your email</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    We sent a 6-digit code to{" "}
+                    <span className="font-medium text-foreground">{step.email}</span>
+                  </p>
+                </div>
+                <form onSubmit={handleOtpSubmit} className="mt-6">
                   <input type="hidden" name="email" value={step.email} />
                   <input type="hidden" name="code" value={otp} />
-
                   <div className="flex justify-center">
                     <InputOTP
                       value={otp}
@@ -235,11 +265,8 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                       disabled={isLoading}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && otp.length === 6 && !isLoading) {
-                          // Find the closest form and submit it
                           const form = (e.target as HTMLElement).closest("form");
-                          if (form) {
-                            form.requestSubmit();
-                          }
+                          if (form) form.requestSubmit();
                         }
                       }}
                     >
@@ -250,69 +277,58 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                       </InputOTPGroup>
                     </InputOTP>
                   </div>
-                  {error && (
-                    <p className="mt-2 text-sm text-red-500 text-center">
-                      {error}
-                    </p>
-                  )}
-                  <p className="text-sm text-muted-foreground text-center mt-4">
-                    Didn't receive a code?{" "}
-                    <Button
-                      variant="link"
-                      className="p-0 h-auto"
-                      onClick={() => setStep("signIn")}
-                    >
-                      Try again
-                    </Button>
-                  </p>
-                </CardContent>
-                <CardFooter className="flex-col gap-2">
+                  {error && <p className="mt-3 text-center text-sm text-red-500">{error}</p>}
                   <Button
                     type="submit"
-                    className="w-full"
+                    className="mt-5 w-full bg-emerald-600 text-white hover:bg-emerald-500"
                     disabled={isLoading || otp.length !== 6}
                   >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Verifying...
-                      </>
-                    ) : (
-                      <>
-                        Verify code
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </>
-                    )}
+                    {isLoading ? "Verifying…" : "Verify and continue"}
                   </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setStep("signIn")}
-                    disabled={isLoading}
-                    className="w-full"
-                  >
-                    Use different email
-                  </Button>
-                </CardFooter>
-              </form>
-            </>
-          )}
+                  <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+                    <button
+                      type="button"
+                      className="hover:text-foreground"
+                      onClick={() => setStep("signIn")}
+                    >
+                      Use a different email
+                    </button>
+                    <button
+                      type="button"
+                      className="hover:text-foreground"
+                      onClick={() => setStep("signIn")}
+                    >
+                      Resend code
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
 
-          <div className="py-4 px-6 text-xs text-center text-muted-foreground bg-muted border-t rounded-b-lg">
-            Secured by{" "}
-            <a
-              href="https://freebuff.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline hover:text-primary transition-colors"
-            >
-              freebuff.com
-            </a>
+            <p className="mt-5 text-center text-[11px] text-muted-foreground">
+              Secured by{" "}
+              <a
+                href="https://freebuff.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-foreground"
+              >
+                freebuff.com
+              </a>
+            </p>
           </div>
-        </Card>
         </div>
-      </div>
+      </main>
     </div>
+  );
+}
+
+function MailIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-7" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="m3 7 9 6 9-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
