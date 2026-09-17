@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Editor, defineIdeTheme, setMonacoTheme, type Monaco } from "@/lib/monacoSetup";
+import {
+  buildMaskFromTokens,
+  decideTagClose,
+  scopeIsTagDelimiter,
+  supportsTagAutoClose,
+  toLines,
+} from "@/lib/tagAutoClose";
 import { useMonaco } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
 import { monacoLang, langFromPath, type LangId } from "@/lib/languages";
@@ -64,6 +71,96 @@ export function CodeEditor({
     });
     ed.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.Enter, () => {
       runRef.current();
+    });
+
+    // Automatic closing tags for HTML / JSX / TSX / XML.
+    // Monaco core has no autoClosingTags option (VS Code extension feature),
+    // so we react to a typed ">" and decide with the language's own tokenizer
+    // (strings/comments masked, tag delimiters verified). Brackets and quotes
+    // keep Monaco's native autoClosingPairs behavior.
+    ed.onDidChangeModelContent((e) => {
+      const model = ed.getModel();
+      if (!model || e.isUndoing || e.isRedoing) return;
+      const mLang = model.getLanguageId();
+      if (!supportsTagAutoClose(mLang)) return;
+
+      // Only react to typing a single ">": one collapsed cursor right after
+      // a newly inserted ">" (not paste, not multi-cursor, not undo/redo).
+      const sels = ed.getSelections?.() ?? [];
+      if (sels.length !== 1 || !sels[0].isEmpty()) return;
+      const position = sels[0].getPosition();
+      const offset = model.getOffsetAt(position);
+      const value = model.getValue();
+      if (value.charAt(offset - 1) !== ">") return;
+      const last = e.changes[e.changes.length - 1];
+      if (!last || last.text !== ">" || last.rangeLength !== 0) return;
+
+      // Tokenize with the language's own grammar and mask strings/comments.
+      const { lines, lineStarts } = toLines(value);
+      let tokens: Array<Array<{ startIndex: number; scopes: string }>>;
+      try {
+        tokens = m.editor.tokenize(value, mLang);
+      } catch {
+        return;
+      }
+      const mask = buildMaskFromTokens(value, lineStarts, tokens);
+      const isMasked = (i: number) => mask[i] ?? false;
+
+      // For HTML/XML the typed ">" must be a tag-delimiter token.
+      let typedGtIsTagEnd = true;
+      if (mLang === "html" || mLang === "xml") {
+        const lineIdx = position.lineNumber - 1;
+        const idx = position.column - 2; // 0-based index of the typed ">"
+        const lineToks = tokens[lineIdx] ?? [];
+        let scope = "";
+        for (let t = 0; t < lineToks.length; t++) {
+          const start = lineToks[t].startIndex;
+          const end =
+            t + 1 < lineToks.length
+              ? lineToks[t + 1].startIndex
+              : (lines[lineIdx]?.length ?? 0);
+          if (idx >= start && idx < end) {
+            scope = lineToks[t].scopes;
+            break;
+          }
+        }
+        typedGtIsTagEnd = scopeIsTagDelimiter(scope);
+      }
+
+      const decision = decideTagClose(value, offset, mLang, isMasked, typedGtIsTagEnd);
+      if (decision.action !== "insert") return;
+
+      const insertClose = () => {
+        ed.executeEdits(
+          "tag-autoclose",
+          [
+            {
+              range: new m.Range(
+                position.lineNumber,
+                position.column,
+                position.lineNumber,
+                position.column,
+              ),
+              text: `</${decision.tagName}>`,
+            },
+          ],
+          [
+            new m.Selection(
+              position.lineNumber,
+              position.column,
+              position.lineNumber,
+              position.column,
+            ),
+          ],
+        );
+      };
+      try {
+        insertClose();
+      } catch {
+        // Some Monaco versions forbid edits during event dispatch — retry
+        // right after it finishes; the cursor is unchanged.
+        window.setTimeout(insertClose, 0);
+      }
     });
   };
 
