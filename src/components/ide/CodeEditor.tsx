@@ -82,23 +82,17 @@ export function CodeEditor({
       const mLang = model.getLanguageId();
       if (!supportsTagAutoClose(mLang)) return;
 
-      // Only react to typing a single ">": one collapsed cursor right after
-      // it (not paste, not multi-cursor, not undo/redo).
-      const sels = ed.getSelections?.() ?? [];
-      if (sels.length !== 1 || !sels[0].isEmpty()) return;
-      const position = sels[0].getPosition();
-      const offset = model.getOffsetAt(position);
+      // Only react to typing a single ">": a pure insertion of ">" (not
+      // paste, not multi-cursor, not undo/redo). Derive the cursor offset
+      // from the change itself — NOT from editor.getSelections(), which can
+      // still hold the pre-typing position while the event is dispatched,
+      // causing every legitimate ">" to be silently rejected.
+      const last = e.changes[e.changes.length - 1];
+      if (!last || last.text !== ">" || last.rangeLength !== 0) return;
+      const offset = last.rangeOffset + last.text.length; // cursor sits right after the typed ">"
       const value = model.getValue();
       if (value.charAt(offset - 1) !== ">") return;
-      const last = e.changes[e.changes.length - 1];
-      if (!last || last.text !== ">") return;
-      // The change must have put the ">" at the cursor: a pure insertion
-      // (rangeLength 0) or a 1-char overtype (XML/JSX configs auto-insert
-      // ">" after a typed "<", so completing the tag overtypes it).
-      if (last.rangeLength > 1) return;
-      // The cursor must sit exactly where the change ended (typed at one
-      // cursor, not a stale selection elsewhere in the document).
-      if (last.rangeOffset + last.text.length !== offset) return;
+      const cursorPos = model.getPositionAt(offset);
 
       // Tokenize with the language's own grammar (falls back to a lexical
       // mask when the tokenizer is unavailable) and decide.
@@ -106,11 +100,11 @@ export function CodeEditor({
         value,
         offset,
         mLang,
-        last.rangeLength,
+        0, // pure insertion
         // NOTE: Monaco's .d.ts types editor.tokenize as Token[][] but the
         // runtime returns Monarch tokens — cast to the real shape.
         m.editor.tokenize as unknown as TokenizeFn | undefined,
-        position.lineNumber - 1,
+        cursorPos.lineNumber - 1,
       );
       if (!result) return;
 
@@ -120,20 +114,20 @@ export function CodeEditor({
           [
             {
               range: new m.Range(
-                position.lineNumber,
-                position.column,
-                position.lineNumber,
-                position.column,
+                cursorPos.lineNumber,
+                cursorPos.column,
+                cursorPos.lineNumber,
+                cursorPos.column,
               ),
               text: `</${result.tagName}>`,
             },
           ],
           [
             new m.Selection(
-              position.lineNumber,
-              position.column,
-              position.lineNumber,
-              position.column,
+              cursorPos.lineNumber,
+              cursorPos.column,
+              cursorPos.lineNumber,
+              cursorPos.column,
             ),
           ],
         );
