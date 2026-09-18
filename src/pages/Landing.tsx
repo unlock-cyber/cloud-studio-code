@@ -58,19 +58,20 @@ const FEATURES = [
   },
 ];
 
-const LANGS = [
-  { name: "Python", mode: "CPython WASM" },
-  { name: "JavaScript", mode: "Browser VM" },
-  { name: "TypeScript", mode: "esbuild → JS" },
-  { name: "C", mode: "GCC sandbox" },
-  { name: "C++", mode: "G++ sandbox" },
-  { name: "Java", mode: "OpenJDK sandbox" },
-  { name: "Bash", mode: "Shell sandbox" },
-  { name: "SQL", mode: "SQLite WASM" },
-  { name: "HTML/CSS", mode: "Live preview" },
-  { name: "React", mode: "Live preview" },
-  { name: "JSON/YAML/XML", mode: "Inspector" },
-  { name: "Markdown", mode: "Rendered view" },
+// Badge styling mirrors the editor's file-type badges (src/lib/fileTree.ts).
+const LANGS: Array<{ name: string; mode: string; badge: string; color: string }> = [
+  { name: "Python", mode: "CPython WASM", badge: "PY", color: "#4B8BBE" },
+  { name: "JavaScript", mode: "Browser VM", badge: "JS", color: "#F7DF1E" },
+  { name: "TypeScript", mode: "esbuild → JS", badge: "TS", color: "#3178C6" },
+  { name: "C", mode: "GCC sandbox", badge: "C", color: "#5C6BC0" },
+  { name: "C++", mode: "G++ sandbox", badge: "C++", color: "#E76F51" },
+  { name: "Java", mode: "OpenJDK sandbox", badge: "JAVA", color: "#E76F00" },
+  { name: "Bash", mode: "Shell sandbox", badge: "SH", color: "#89E051" },
+  { name: "SQL", mode: "SQLite WASM", badge: "SQL", color: "#F29111" },
+  { name: "HTML/CSS", mode: "Live preview", badge: "</>", color: "#E34C26" },
+  { name: "React", mode: "Live preview", badge: "JSX", color: "#61DAFB" },
+  { name: "JSON/YAML/XML", mode: "Inspector", badge: "{}", color: "#CBCB41" },
+  { name: "Markdown", mode: "Rendered view", badge: "MD", color: "#8DBCDF" },
 ];
 
 export default function Landing() {
@@ -268,9 +269,17 @@ export default function Landing() {
           <h2 className="text-2xl font-bold">Languages that actually run</h2>
           <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {LANGS.map((l) => (
-              <div key={l.name} className="rounded-lg border border-border/60 bg-card px-4 py-3">
-                <p className="text-sm font-medium">{l.name}</p>
-                <p className="text-[11px] text-muted-foreground">{l.mode}</p>
+              <div key={l.name} className="flex items-center gap-2.5 rounded-lg border border-border/60 bg-card px-4 py-3">
+                <span
+                  className="inline-flex h-5 shrink-0 items-center rounded-sm px-1 text-[9px] font-bold leading-none"
+                  style={{ color: l.color, border: `1px solid ${l.color}55`, background: `${l.color}14` }}
+                >
+                  {l.badge}
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium leading-tight">{l.name}</span>
+                  <span className="block truncate text-[11px] leading-tight text-muted-foreground">{l.mode}</span>
+                </span>
               </div>
             ))}
           </div>
