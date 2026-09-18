@@ -311,18 +311,6 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                 </form>
               </div>
             )}
-
-            <p className="mt-5 text-center text-[11px] text-muted-foreground">
-              Secured by{" "}
-              <a
-                href="https://freebuff.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline hover:text-foreground"
-              >
-                freebuff.com
-              </a>
-            </p>
           </div>
         </div>
       </main>
