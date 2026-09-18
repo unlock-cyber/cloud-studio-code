@@ -279,7 +279,7 @@ export default function Dashboard() {
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
           <div className="flex items-center gap-2">
             <TerminalSquare className="size-5 text-primary" />
-            <span className="font-semibold">Cloud Code Studio</span>
+            <span className="font-semibold">Cloud Studio Code</span>
           </div>
           <div className="ml-auto flex items-center gap-2">
             <Badge variant={isGuest ? "secondary" : "default"} className="text-[11px]">

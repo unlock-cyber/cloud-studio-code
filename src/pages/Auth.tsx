@@ -143,7 +143,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
           className="flex items-center gap-2 rounded-md py-1 pr-2 text-sm font-semibold transition-colors hover:text-emerald-600 dark:hover:text-emerald-400"
         >
           <TerminalSquare className="size-5 text-emerald-500 dark:text-emerald-400" />
-          Cloud Code Studio
+          Cloud Studio Code
         </button>
         <div className="flex items-center gap-1">
           <ThemeToggle />
@@ -195,7 +195,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
               <div className="rounded-xl border border-border/80 bg-card p-6 shadow-xl shadow-black/5">
                 <div className="flex flex-col items-center text-center">
                   <BrandMark size={56} className="mb-4 cursor-pointer rounded-xl" onClick={navigateHome} />
-                  <h2 className="text-lg font-semibold">Sign in to Cloud Code Studio</h2>
+                  <h2 className="text-lg font-semibold">Sign in to Cloud Studio Code</h2>
                   <p className="mt-1 text-sm text-muted-foreground">
                     We&apos;ll email you a one-time code — no password needed.
                   </p>

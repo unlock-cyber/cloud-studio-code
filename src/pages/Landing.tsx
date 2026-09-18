@@ -142,7 +142,7 @@ export default function Landing() {
         <div className="mx-auto flex h-14 max-w-6xl items-center px-4">
           <div className="flex items-center gap-2">
             <TerminalSquare className="size-5 text-emerald-500 dark:text-emerald-400" />
-            <span className="font-semibold">Cloud Code Studio</span>
+            <span className="font-semibold">Cloud Studio Code</span>
           </div>
           <nav className="ml-auto flex items-center gap-1">
             {showDashAction ? (
@@ -188,7 +188,7 @@ export default function Landing() {
               <span className="text-emerald-600 dark:text-emerald-400"> without leaving the tab</span>
             </h1>
             <p className="mt-5 max-w-lg text-base leading-relaxed text-muted-foreground">
-              Cloud Code Studio compiles and executes your code for real — Python, C++, Java, TypeScript, SQL and live web previews — in sandboxed runtimes. Projects, files and sessions persist in the cloud.
+              Cloud Studio Code compiles and executes your code for real — Python, C++, Java, TypeScript, SQL and live web previews — in sandboxed runtimes. Projects, files and sessions persist in the cloud.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               {showDashAction ? (
@@ -225,7 +225,7 @@ export default function Landing() {
               <span className="size-2.5 rounded-full bg-red-500/70" />
               <span className="size-2.5 rounded-full bg-amber-500/70" />
               <span className="size-2.5 rounded-full bg-emerald-500/70" />
-              <span className="ml-2 text-[11px] text-muted-foreground">main.py — Cloud Code Studio</span>
+              <span className="ml-2 text-[11px] text-muted-foreground">main.py — Cloud Studio Code</span>
             </div>
             <div className="p-4 font-mono text-[12.5px] leading-relaxed">
               <p><span className="text-muted-foreground">$</span> <span className="text-emerald-600 dark:text-emerald-400">run main.py</span></p>
@@ -301,7 +301,7 @@ export default function Landing() {
 
       <footer className="border-t border-border/60 py-8">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 text-xs text-muted-foreground">
-          <span>Cloud Code Studio</span>
+          <span>Cloud Studio Code</span>
           <span>Python · C++ · Java · TypeScript · SQL · Web</span>
         </div>
       </footer>

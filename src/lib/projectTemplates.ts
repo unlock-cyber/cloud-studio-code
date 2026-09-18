@@ -20,7 +20,7 @@ const htmlIndex = `<!DOCTYPE html>
 </head>
 <body>
   <header>
-    <h1>Hello from Cloud Code Studio</h1>
+    <h1>Hello from Cloud Studio Code</h1>
     <p>Edit <code>index.html</code>, <code>style.css</code> and <code>script.js</code>, then hit <b>Run</b>.</p>
   </header>
   <main>

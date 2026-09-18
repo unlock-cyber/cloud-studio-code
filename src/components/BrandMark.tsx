@@ -1,4 +1,4 @@
-// Cloud Code Studio brand mark — same terminal-prompt tile as the favicon,
+// Cloud Studio Code brand mark — same terminal-prompt tile as the favicon,
 // inlined so it renders crisply at any size and inherits currentColor for the
 // prompt glyph when `mono` is set.
 
