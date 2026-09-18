@@ -43,6 +43,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { formatBytesClient, formatDate } from "@/lib/clientHelpers";
 import { TEMPLATE_PICKER } from "@/lib/projectTemplates";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { storeGuestContext } from "@/lib/guestContext";
+import { useAuthToken } from "@convex-dev/auth/react";
 
 const TEMPLATE_META_LABEL: Record<string, string> = {
   blank: "Blank",
@@ -267,6 +269,24 @@ export default function Dashboard() {
   }
 
   const isGuest = workspace.kind === "guest";
+  // Remember the guest workspace/session while the user is in the guest
+  // workspace so the OTP handler can migrate it after sign-up.
+  const providerToken = useAuthToken();
+  useEffect(() => {
+    if (isGuest && providerToken) {
+      const sessionId = (() => {
+        try {
+          const payload = JSON.parse(atob(providerToken.split(".")[1]));
+          return typeof payload.sessionId === "string" ? payload.sessionId : "";
+        } catch {
+          return "";
+        }
+      })();
+      if (sessionId) {
+        storeGuestContext({ workspaceId: workspace._id, sessionId });
+      }
+    }
+  }, [isGuest, providerToken, workspace._id]);
   const usedPct = Math.min(100, (workspace.usedBytes / workspace.storageLimitBytes) * 100);
   const timeLeftMs = workspace.expiresAt - Date.now();
   const hoursLeft = Math.max(0, timeLeftMs / 3_600_000);

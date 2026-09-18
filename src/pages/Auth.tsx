@@ -7,6 +7,9 @@ import { BrandMark } from "@/components/BrandMark";
 import { TerminalSquare, Check } from "lucide-react";
 import { Suspense, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { captureGuestContext, clearGuestContext } from "@/lib/guestContext";
 
 interface AuthProps {
   redirectAfterAuth?: string;
@@ -47,6 +50,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const migrate = useMutation(api.migrateWorkspace.migrateFromGuest);
 
   useEffect(() => {
     // Registered users visiting /auth while signed in are bounced to the app,
@@ -90,6 +94,23 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     try {
       const formData = new FormData(event.currentTarget);
       await signIn("email-otp", formData);
+
+      // Guest upgrade: the OTP sign-in created a fresh registered user, so
+      // move the guest workspace (all projects/files/databases) into it now —
+      // BEFORE entering the dashboard — so the authenticated workspace shows
+      // up immediately, with no refresh. Atomic server-side: on failure the
+      // guest data is untouched and we stay here with a clear error.
+      const guest = captureGuestContext();
+      if (guest) {
+        await migrate({
+          guestWorkspaceId: guest.workspaceId as never,
+          guestSessionId: guest.sessionId,
+        });
+        // Only clear after a successful move — on failure the context stays
+        // so the user can retry without losing the transfer.
+        clearGuestContext();
+      }
+
       // OTP verification creates a fresh registered user/session — it does
       // not link to the previous anonymous session. Always enter the
       // authenticated home instead of honoring a `returnTo` captured while
@@ -98,7 +119,11 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       navigate("/dashboard");
     } catch (error) {
       console.error("OTP verification error:", error);
-      setError("The verification code you entered is incorrect.");
+      setError(
+        error instanceof Error && /transferred|migrat/i.test(error.message)
+          ? error.message
+          : "The verification code you entered is incorrect.",
+      );
       setIsLoading(false);
       setOtp("");
     }
