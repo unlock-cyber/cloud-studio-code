@@ -1,5 +1,5 @@
 import { useConvexAuth } from "convex/react";
-import { useAuth as useProviderAuth } from "@convex-dev/auth/react";
+import { useAuthToken } from "@convex-dev/auth/react";
 import { Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router";
@@ -14,8 +14,11 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   // *just* signed in (guests from the landing page, or users completing OTP)
   // straight back to /auth during that window. The provider token is the
   // source of truth for whether a session exists, so we key off it.
-  const { isLoading: providerLoading, isAuthenticated: providerAuthenticated } =
-    useProviderAuth();
+  // A session token in storage is the provider-level truth: non-null right
+  // after signIn() resolves, null when signed out.
+  const providerToken = useAuthToken();
+  const providerLoading = false;
+  const providerAuthenticated = providerToken !== null;
   const { isLoading: convexLoading, isAuthenticated: convexAuthenticated } =
     useConvexAuth();
   const location = useLocation();

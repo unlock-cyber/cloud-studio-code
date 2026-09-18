@@ -56,7 +56,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     // sign-in the session switches, and acting on a stale/undefined user
     // could send the fresh registered user back to a guest-era path.
     if (authLoading || user === undefined) return;
-    if (!isAuthenticated || user.isAnonymous) return;
+    if (!isAuthenticated || !!user && user.isAnonymous) return;
     // Enter the authenticated app at the dashboard. Never honor a `returnTo`
     // captured under a previous session (e.g. a guest workspace path — its
     // data is not accessible to the newly authenticated account).
