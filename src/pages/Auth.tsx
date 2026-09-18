@@ -52,10 +52,16 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     // Registered users visiting /auth while signed in are bounced to the app,
     // but guests must NOT be redirected — they come here to upgrade to a
     // registered account ("Create account" button on the dashboard).
-    if (!authLoading && isAuthenticated && !user?.isAnonymous) {
-      navigate(redirect);
-    }
-  }, [authLoading, isAuthenticated, user?.isAnonymous, navigate, redirect]);
+    // Wait for the user doc to resolve before acting: right after an OTP
+    // sign-in the session switches, and acting on a stale/undefined user
+    // could send the fresh registered user back to a guest-era path.
+    if (authLoading || user === undefined) return;
+    if (!isAuthenticated || user.isAnonymous) return;
+    // Enter the authenticated app at the dashboard. Never honor a `returnTo`
+    // captured under a previous session (e.g. a guest workspace path — its
+    // data is not accessible to the newly authenticated account).
+    navigate("/dashboard");
+  }, [authLoading, isAuthenticated, user, navigate]);
 
   const handleEmailSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();

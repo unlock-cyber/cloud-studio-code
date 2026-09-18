@@ -39,16 +39,14 @@ const VOID_HTML_TAGS = new Set([
 
 /**
  * Tag names that must never be auto-closed: void/self-closing elements,
- * comments/CDATA/doctype/processing instructions, and (in HTML only) <p>,
- * whose end tag is optional — auto-inserting it surprises users.
+ * comments/CDATA/doctype/processing instructions.
  */
-export function shouldAutoCloseTag(tagName: string, langId: string): boolean {
+export function shouldAutoCloseTag(tagName: string, _langId: string): boolean {
   const name = tagName.toLowerCase();
   if (!name) return false;
   if (name.startsWith("!") || name.startsWith("?")) return false;
   if (name === "doctype") return false;
   if (VOID_HTML_TAGS.has(name)) return false;
-  if (langId === "html" && name === "p") return false;
   return true;
 }
 
@@ -481,4 +479,140 @@ export function decideTagClose(
   }
 
   return { action: "insert", tagName };
+}
+
+// ---------------------------------------------------------------------
+// Editor-facing orchestration (kept pure & unit-testable).
+// ---------------------------------------------------------------------
+
+/** Monarch token shape actually returned by `monaco.editor.tokenize`.
+ *  (Monaco's .d.ts claims `{offset,type}` — a long-standing typings bug.) */
+export type MonarchToken = { startIndex: number; scopes: string };
+
+/** Signature of `monaco.editor.tokenize`. May be undefined in runtimes
+ *  where the AMD-loaded Monaco build doesn't expose it. */
+export type TokenizeFn = (
+  text: string,
+  languageId: string,
+) => MonarchToken[][] | undefined;
+
+/**
+ * Builds the string/comment mask from Monaco's Monarch tokens when available,
+ * falling back to a lightweight lexical pass when the tokenizer is
+ * unavailable or errors. The lexical fallback still catches quotes and block
+ * comments — enough to keep auto-closing safe around strings and `<!-- -->`.
+ */
+export function buildMaskFromTokensOrLexical(
+  value: string,
+  lineStarts: number[],
+  tokens: MonarchToken[][] | undefined,
+): boolean[] {
+  if (tokens) return buildMaskFromTokens(value, lineStarts, tokens);
+  return buildLexicalMask(value);
+}
+
+/**
+ * Quote/comment mask without a grammar: masks double/single-quoted spans
+ * (per line) and HTML block comments. Conservative by design — it only
+ * needs to prevent deciding inside obviously non-markup regions.
+ */
+export function buildLexicalMask(text: string): boolean[] {
+  const mask = new Array<boolean>(text.length).fill(false);
+  const { lines, lineStarts } = toLines(text);
+  for (let ln = 0; ln < lines.length; ln++) {
+    const line = lines[ln];
+    let inQuote: string | null = null;
+    for (let c = 0; c < line.length; c++) {
+      const ch = line[c];
+      if (inQuote) {
+        mask[(lineStarts[ln] ?? 0) + c] = true;
+        if (ch === inQuote) inQuote = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'") inQuote = ch;
+    }
+  }
+  // HTML comments: mask from `<!--` through `-->` (or end of text).
+  let i = text.indexOf("<!--");
+  while (i !== -1) {
+    const end = text.indexOf("-->", i + 4);
+    const stop = end === -1 ? text.length : end + 3;
+    for (let j = i; j < Math.min(stop, text.length); j++) mask[j] = true;
+    i = text.indexOf("<!--", stop);
+  }
+  return mask;
+}
+
+/** Detects whether the typed ">" (0-based char index `idx` on `line`)
+ *  is tokenized as a tag delimiter for markup languages. When the tokenizer
+ *  is unavailable we optimistically return true — the caller still runs the
+ *  full structural validation (backward scan to `<`, attribute scan, etc.),
+ *  which independently rejects most false positives. */
+export function typedGtIsDelimiter(
+  line: string,
+  idx: number,
+  mLang: string,
+  tokensForLine: MonarchToken[] | undefined,
+): boolean {
+  if (mLang !== "html" && mLang !== "xml") return true;
+  if (!tokensForLine) return true;
+  for (let t = 0; t < tokensForLine.length; t++) {
+    const start = tokensForLine[t].startIndex;
+    const end =
+      t + 1 < tokensForLine.length
+        ? tokensForLine[t + 1].startIndex
+        : line.length;
+    if (idx >= start && idx < end) {
+      return scopeIsTagDelimiter(tokensForLine[t].scopes);
+    }
+  }
+  return true;
+}
+
+/**
+ * Full pipeline for a typed ">" at cursor offset `offset` in document
+ * `value`. Returns the closing tag to insert, or null. `changeRangeLength`
+ * is the replaced length of the change that produced the ">" — 0 for a pure
+ * insertion, 1 when the ">" overtyped an auto-inserted placeholder (the
+ * XML/JSX language configs auto-insert ">" after a typed "<", so completing
+ * the tag replaces that placeholder instead of inserting).
+ */
+export function handleTypedGt(
+  value: string,
+  offset: number,
+  mLang: string,
+  changeRangeLength: number,
+  tokenize: TokenizeFn | undefined,
+  lineIndex: number,
+): { tagName: string } | null {
+  if (changeRangeLength !== 0 && changeRangeLength !== 1) return null;
+
+  // Single tokenize pass for both the mask and the delimiter check.
+  let tokens: MonarchToken[][] | undefined;
+  if (tokenize) {
+    try {
+      tokens = tokenize(value, mLang);
+    } catch {
+      tokens = undefined;
+    }
+  }
+
+  const { lines, lineStarts } = toLines(value);
+  const mask = buildMaskFromTokensOrLexical(value, lineStarts, tokens);
+  const isMasked = (i: number) => mask[i] ?? false;
+
+  // The typed ">" itself must not be masked (not inside a string/comment).
+  if (isMasked(offset - 1)) return null;
+
+  const typedGtIsTagEnd = typedGtIsDelimiter(
+    lines[lineIndex] ?? "",
+    // 0-based index of the typed ">" within its line.
+    offset - 1 - (lineStarts[lineIndex] ?? 0),
+    mLang,
+    tokens?.[lineIndex],
+  );
+
+  const decision = decideTagClose(value, offset, mLang, isMasked, typedGtIsTagEnd);
+  if (decision.action !== "insert") return null;
+  return { tagName: decision.tagName };
 }

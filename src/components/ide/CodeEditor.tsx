@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Editor, defineIdeTheme, setMonacoTheme, type Monaco } from "@/lib/monacoSetup";
 import {
-  buildMaskFromTokens,
-  decideTagClose,
-  scopeIsTagDelimiter,
+  handleTypedGt,
   supportsTagAutoClose,
-  toLines,
+  type TokenizeFn,
 } from "@/lib/tagAutoClose";
 import { useMonaco } from "@monaco-editor/react";
 import type { editor } from "monaco-editor";
@@ -85,7 +83,7 @@ export function CodeEditor({
       if (!supportsTagAutoClose(mLang)) return;
 
       // Only react to typing a single ">": one collapsed cursor right after
-      // a newly inserted ">" (not paste, not multi-cursor, not undo/redo).
+      // it (not paste, not multi-cursor, not undo/redo).
       const sels = ed.getSelections?.() ?? [];
       if (sels.length !== 1 || !sels[0].isEmpty()) return;
       const position = sels[0].getPosition();
@@ -93,45 +91,28 @@ export function CodeEditor({
       const value = model.getValue();
       if (value.charAt(offset - 1) !== ">") return;
       const last = e.changes[e.changes.length - 1];
-      if (!last || last.text !== ">" || last.rangeLength !== 0) return;
+      if (!last || last.text !== ">") return;
+      // The change must have put the ">" at the cursor: a pure insertion
+      // (rangeLength 0) or a 1-char overtype (XML/JSX configs auto-insert
+      // ">" after a typed "<", so completing the tag overtypes it).
+      if (last.rangeLength > 1) return;
+      // The cursor must sit exactly where the change ended (typed at one
+      // cursor, not a stale selection elsewhere in the document).
+      if (last.rangeOffset + last.text.length !== offset) return;
 
-      // Tokenize with the language's own grammar and mask strings/comments.
-      // NOTE: Monaco's .d.ts types editor.tokenize as Token[][] ({offset,type}),
-      // but the runtime actually returns Monarch tokens ({startIndex,scopes}) —
-      // a long-standing typings inconsistency. Cast to the real shape.
-      const { lines, lineStarts } = toLines(value);
-      let tokens: Array<Array<{ startIndex: number; scopes: string }>>;
-      try {
-        tokens = m.editor.tokenize(value, mLang) as unknown as typeof tokens;
-      } catch {
-        return;
-      }
-      const mask = buildMaskFromTokens(value, lineStarts, tokens);
-      const isMasked = (i: number) => mask[i] ?? false;
-
-      // For HTML/XML the typed ">" must be a tag-delimiter token.
-      let typedGtIsTagEnd = true;
-      if (mLang === "html" || mLang === "xml") {
-        const lineIdx = position.lineNumber - 1;
-        const idx = position.column - 2; // 0-based index of the typed ">"
-        const lineToks = tokens[lineIdx] ?? [];
-        let scope = "";
-        for (let t = 0; t < lineToks.length; t++) {
-          const start = lineToks[t].startIndex;
-          const end =
-            t + 1 < lineToks.length
-              ? lineToks[t + 1].startIndex
-              : (lines[lineIdx]?.length ?? 0);
-          if (idx >= start && idx < end) {
-            scope = lineToks[t].scopes;
-            break;
-          }
-        }
-        typedGtIsTagEnd = scopeIsTagDelimiter(scope);
-      }
-
-      const decision = decideTagClose(value, offset, mLang, isMasked, typedGtIsTagEnd);
-      if (decision.action !== "insert") return;
+      // Tokenize with the language's own grammar (falls back to a lexical
+      // mask when the tokenizer is unavailable) and decide.
+      const result = handleTypedGt(
+        value,
+        offset,
+        mLang,
+        last.rangeLength,
+        // NOTE: Monaco's .d.ts types editor.tokenize as Token[][] but the
+        // runtime returns Monarch tokens — cast to the real shape.
+        m.editor.tokenize as unknown as TokenizeFn | undefined,
+        position.lineNumber - 1,
+      );
+      if (!result) return;
 
       const insertClose = () => {
         ed.executeEdits(
@@ -144,7 +125,7 @@ export function CodeEditor({
                 position.lineNumber,
                 position.column,
               ),
-              text: `</${decision.tagName}>`,
+              text: `</${result.tagName}>`,
             },
           ],
           [
