@@ -90,6 +90,46 @@ const schema = defineSchema(
       updatedAt: v.number(),
     }).index("by_project", ["projectId"]),
 
+    // ===== Bug reporting =====
+
+    bugReports: defineTable({
+      title: v.string(),
+      description: v.string(),
+      stepsToReproduce: v.string(),
+      expectedBehavior: v.string(),
+      actualBehavior: v.string(),
+      browserInfo: v.optional(v.string()),
+      reporterName: v.optional(v.string()),
+      reporterEmail: v.optional(v.string()),
+      status: v.union(
+        v.literal("new"),
+        v.literal("in_progress"),
+        v.literal("resolved"),
+        v.literal("closed"),
+      ),
+      notes: v.optional(v.string()),
+      important: v.boolean(),
+      archived: v.boolean(),
+      submittedAt: v.number(),
+    })
+      .index("by_submitted", ["submittedAt"])
+      .index("by_status", ["status"]),
+
+    // Private bug-management area: single hashed password + failed-attempt tracking.
+    // The plaintext password never reaches this database or the client bundle.
+    backstageAuth: defineTable({
+      failedAttempts: v.number(),
+      lastFailedAt: v.number(),
+      lockedUntil: v.optional(v.number()),
+    }),
+
+    backstageSessions: defineTable({
+      // sha256 of the issued session token — the raw token lives only in the client
+      tokenHash: v.string(),
+      createdAt: v.number(),
+      expiresAt: v.number(),
+    }).index("by_token", ["tokenHash"]),
+
     // add other tables here
   },
   {

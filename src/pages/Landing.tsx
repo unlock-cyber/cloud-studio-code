@@ -333,6 +333,14 @@ export default function Landing() {
             >
               Changelog
             </button>
+            <span aria-hidden="true">·</span>
+            <button
+              type="button"
+              className="underline-offset-2 transition-colors hover:text-foreground hover:underline"
+              onClick={() => navigate("/contributions")}
+            >
+              Bugs &amp; Contributions
+            </button>
           </span>
           <span>Python · C++ · Java · TypeScript · SQL · Web</span>
         </div>
