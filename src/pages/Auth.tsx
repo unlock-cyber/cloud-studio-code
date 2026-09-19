@@ -11,7 +11,11 @@ import { flushSync } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { captureGuestContext, clearGuestContext } from "@/lib/guestContext";
+import {
+  captureGuestContext,
+  clearGuestContext,
+  storeGuestContext,
+} from "@/lib/guestContext";
 
 interface AuthProps {
   redirectAfterAuth?: string;
@@ -62,6 +66,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     | "redirecting"
     | "transfer-failed"
   >(null);
+  // Why the transfer failed, when the server could say so precisely. Drives
+  // an honest failure message (e.g. "nothing left to transfer" vs "data
+  // preserved — retry").
+  const [transferFailureReason, setTransferFailureReason] = useState<string | null>(null);
   const migrate = useMutation(api.migrateWorkspace.migrateFromGuest);
 
   // Guest-upgrade bookkeeping: while the guest workspace migration is in
@@ -97,7 +105,19 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     // provision a fresh empty authenticated workspace BEFORE the guest
     // migration has run — stranding the guest data. The suppression lasts
     // until the migration finishes (success or failure).
-    if (captureGuestContext()) migrationPendingRef.current = true;
+    const pendingGuest = captureGuestContext();
+    if (pendingGuest) {
+      migrationPendingRef.current = true;
+      // Refresh the capture timestamp. The workspace/session ids are still
+      // valid (the dashboard's heartbeat keeps the workspace alive), but the
+      // context carries a 1h TTL measured from capture time — a guest who has
+      // been working for a while would otherwise have the context discarded
+      // right before the OTP handler runs, silently skipping the migration.
+      storeGuestContext({
+        workspaceId: pendingGuest.workspaceId,
+        sessionId: pendingGuest.sessionId,
+      });
+    }
     try {
       const formData = new FormData(event.currentTarget);
       await signIn("email-otp", formData);
@@ -145,27 +165,34 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
           setUpgradeStage("signed-in");
           // Step 2: transferring the workspace (mutation in flight).
           setUpgradeStage("transferring");
-          let result: { migrated: boolean; reason?: string } | null = null;
+          let result: { migrated: boolean; reason?: string } | undefined = undefined;
           try {
             result = await migrate({
-              guestWorkspaceId: guest.workspaceId as never,
-              guestSessionId: guest.sessionId,
+              guestWorkspaceId: (guest.workspaceId || undefined) as never,
+              guestSessionId: guest.sessionId || undefined,
             });
-          } catch {
+          } catch (e) {
             // The mutation is atomic: nothing was written server-side, so the
             // guest workspace/projects/files are fully preserved and the user
             // can retry. Show the failure state — never a false success.
-            migrationPendingRef.current = false;
+            //
+            // Keep migrationPendingRef TRUE: the auth-redirect effect must
+            // stay suppressed so it cannot yank this failure UI away with an
+            // SPA navigation to /dashboard (which would also provision an
+            // empty workspace ahead of a retry).
+            console.error("Guest workspace migration failed:", e);
+            setTransferFailureReason(null);
             setUpgradeStage("transfer-failed");
             setIsLoading(false);
             return;
           }
-          if (result === null || !result.migrated) {
-            // Explicit non-success from the mutation (e.g. the guest
-            // workspace no longer exists, or the target already has content).
-            // Either way the guest data was NOT moved — report failure and
-            // keep the guest context so it can be retried.
-            migrationPendingRef.current = false;
+          if (!result || !result.migrated) {
+            // Explicit non-success from the mutation. Either way the guest
+            // data was NOT moved — report failure and keep the guest context
+            // so it can be retried. As above, the redirect suppression stays
+            // ON so the failure status remains visible.
+            console.error("Guest workspace migration did not complete:", result?.reason);
+            setTransferFailureReason(result?.reason ?? null);
             setUpgradeStage("transfer-failed");
             setIsLoading(false);
             return;
@@ -190,10 +217,16 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
           window.location.replace("/dashboard");
           return;
         } catch (e) {
-          migrationPendingRef.current = false;
+          // Unexpected client-side error between stages. The migration may or
+          // may not have committed — the guest context is deliberately NOT
+          // cleared (the server-side move is atomic/idempotent-safe: either it
+          // committed or the guest data is untouched), and the redirect
+          // suppression stays on so no navigation can race this failure UI.
+          console.error("Guest upgrade transition failed:", e);
+          setTransferFailureReason(null);
           setUpgradeStage("transfer-failed");
           setIsLoading(false);
-          throw e;
+          return;
         }
       }
 
@@ -409,8 +442,11 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                         Transfer could not be completed
                       </p>
                       <p className="mt-1.5 text-xs leading-relaxed text-amber-700/90 dark:text-amber-200/90">
-                        Your guest workspace and all of its projects and files have been
-                        preserved. You can safely retry — nothing was lost.
+                        {transferFailureReason === "workspace-not-found"
+                          ? "The guest workspace could no longer be found on the server, so nothing was transferred. Your guest workspace has not been changed and nothing was lost — you can retry from the dashboard."
+                          : transferFailureReason === "target-already-exists"
+                            ? "The new account already contains projects, so the transfer was stopped to avoid overwriting anything. Your guest workspace has been preserved untouched — you can safely retry."
+                            : "Your guest workspace and all of its projects and files have been preserved. You can safely retry — nothing was lost."}
                       </p>
                     </div>
                   ) : (

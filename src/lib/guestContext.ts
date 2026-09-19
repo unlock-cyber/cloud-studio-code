@@ -53,3 +53,29 @@ export function clearGuestContext() {
     // ignore
   }
 }
+
+/**
+ * Extracts the Convex auth session id from a JWT session token.
+ *
+ * Convex Auth tokens are JWS compact serializations: base64URL, unpadded.
+ * Browsers' `atob` only accepts the standard base64 alphabet AND requires
+ * correct padding, so calling it on the raw payload segment throws for most
+ * tokens (any `-`/`_` character, or a length not divisible by 4). Normalizing
+ * to padded standard base64 first makes the decode reliable for every token.
+ */
+export function sessionIdFromAuthToken(token: string | null | undefined): string {
+  if (!token) return "";
+  try {
+    const payloadSegment = token.split(".")[1];
+    if (!payloadSegment) return "";
+    let b64 = payloadSegment.replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4 !== 0) b64 += "=";
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const payload = JSON.parse(new TextDecoder().decode(bytes)) as {
+      sessionId?: unknown;
+    };
+    return typeof payload.sessionId === "string" ? payload.sessionId : "";
+  } catch {
+    return "";
+  }
+}

@@ -21,6 +21,9 @@
 //    nothing is left behind.
 //  - Successful authentication alone is never treated as a successful
 //    migration — the migration result is explicit ({ migrated: true/false }).
+//  - Expired workspace shells are revived before the move: an expired shell
+//    would otherwise be wiped by the dashboard's expiry gate immediately
+//    after the reload, destroying freshly migrated data.
 
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { mutation, type MutationCtx } from "./_generated/server";
@@ -35,7 +38,10 @@ type WorkspaceDoc = {
   _id: Id<"workspaces">;
   userId: Id<"users">;
   kind: "guest" | "registered";
+  status: "active" | "expired";
   usedBytes: number;
+  inactivityLimitMs: number;
+  expiresAt: number;
   editorTheme?: "dark" | "light";
   fontSize?: number;
   wordWrap?: boolean;
@@ -43,7 +49,10 @@ type WorkspaceDoc = {
 
 export const migrateFromGuest = mutation({
   args: {
-    guestWorkspaceId: v.id("workspaces"),
+    // Optional: when the client only knows the guest session id (its upgrade
+    // context was stamped on /auth without the workspace id), the workspace
+    // is resolved from the session instead.
+    guestWorkspaceId: v.optional(v.id("workspaces")),
     // Session id of the guest session the caller held before OTP sign-in,
     // used as an ownership proof. Optional for resilience (older clients /
     // unreadable tokens), but when present it is strictly verified.
@@ -69,10 +78,12 @@ export const migrateFromGuest = mutation({
     //    if it is stale/missing, fall back to "the workspace owned by the
     //    anonymous user the client still remembers" via the session id.
     let ws: WorkspaceDoc | null = null;
-    try {
-      ws = (await ctx.db.get(guestWorkspaceId)) as WorkspaceDoc | null;
-    } catch {
-      ws = null;
+    if (guestWorkspaceId) {
+      try {
+        ws = (await ctx.db.get(guestWorkspaceId)) as WorkspaceDoc | null;
+      } catch {
+        ws = null;
+      }
     }
     if (!ws && guestSessionId) {
       const guestUserIdFromSession = await userIdFromSession(
@@ -111,6 +122,20 @@ export const migrateFromGuest = mutation({
       }
     }
 
+    // 3.5 If the guest workspace's inactivity window lapsed while the user
+    //     was on /auth, it may be marked expired (or about to be reaped by
+    //     the expiry cron). The data is being deliberately kept — revive the
+    //     shell so the expiry gate on the dashboard can never wipe what we
+    //     are about to move into it.
+    const reviveNow = Date.now();
+    if (ws.status === "expired" || ws.expiresAt <= reviveNow) {
+      await ctx.db.patch(ws._id, {
+        status: "active",
+        lastActivityAt: reviveNow,
+        expiresAt: reviveNow + ws.inactivityLimitMs,
+      });
+    }
+
     // 4. Determine the target workspace for the new registered user.
     const existingTarget = (await ctx.db
       .query("workspaces")
@@ -132,9 +157,15 @@ export const migrateFromGuest = mutation({
         return { migrated: false, reason: "target-already-exists" };
       }
       targetId = existingTarget._id;
-      // Adopt the guest workspace's settings and usage into the target.
+      // Adopt the guest workspace's settings and usage into the target, and
+      // make sure the target itself is active — an expired shell would be
+      // wiped by the dashboard's expiry gate right after the reload.
+      const now = Date.now();
       await ctx.db.patch(existingTarget._id, {
+        status: "active",
         usedBytes: ws.usedBytes,
+        lastActivityAt: now,
+        expiresAt: now + REGISTERED_INACTIVITY_MS,
         editorTheme: ws.editorTheme ?? existingTarget.editorTheme,
         fontSize: ws.fontSize ?? existingTarget.fontSize,
         wordWrap: ws.wordWrap ?? existingTarget.wordWrap,
@@ -148,6 +179,7 @@ export const migrateFromGuest = mutation({
       await ctx.db.patch(ws._id, {
         userId: authUserId,
         kind: "registered",
+        status: "active",
         storageLimitBytes: REGISTERED_LIMIT_BYTES,
         inactivityLimitMs: REGISTERED_INACTIVITY_MS,
         expiresAt: now + REGISTERED_INACTIVITY_MS,
