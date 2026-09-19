@@ -325,6 +325,14 @@ export default function Landing() {
             >
               About
             </button>
+            <span aria-hidden="true">·</span>
+            <button
+              type="button"
+              className="underline-offset-2 transition-colors hover:text-foreground hover:underline"
+              onClick={() => navigate("/changelog")}
+            >
+              Changelog
+            </button>
           </span>
           <span>Python · C++ · Java · TypeScript · SQL · Web</span>
         </div>
