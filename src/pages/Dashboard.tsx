@@ -88,6 +88,27 @@ export default function Dashboard() {
   const [toast, setToast] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Remember the guest workspace/session while the user is in the guest
+  // workspace so the OTP handler can migrate it after sign-up.
+  // NOTE: must live above any early returns — conditional hooks are illegal.
+  const providerToken = useAuthToken();
+  const isGuest = workspace?.kind === "guest";
+  useEffect(() => {
+    if (isGuest && providerToken && workspace) {
+      const sessionId = (() => {
+        try {
+          const payload = JSON.parse(atob(providerToken.split(".")[1]));
+          return typeof payload.sessionId === "string" ? payload.sessionId : "";
+        } catch {
+          return "";
+        }
+      })();
+      if (sessionId) {
+        storeGuestContext({ workspaceId: workspace._id, sessionId });
+      }
+    }
+  }, [isGuest, providerToken, workspace]);
+
   const showToast = useCallback((msg: string) => {
     setToast(msg);
     window.setTimeout(() => setToast(null), 3600);
@@ -268,25 +289,6 @@ export default function Dashboard() {
     );
   }
 
-  const isGuest = workspace.kind === "guest";
-  // Remember the guest workspace/session while the user is in the guest
-  // workspace so the OTP handler can migrate it after sign-up.
-  const providerToken = useAuthToken();
-  useEffect(() => {
-    if (isGuest && providerToken) {
-      const sessionId = (() => {
-        try {
-          const payload = JSON.parse(atob(providerToken.split(".")[1]));
-          return typeof payload.sessionId === "string" ? payload.sessionId : "";
-        } catch {
-          return "";
-        }
-      })();
-      if (sessionId) {
-        storeGuestContext({ workspaceId: workspace._id, sessionId });
-      }
-    }
-  }, [isGuest, providerToken, workspace._id]);
   const usedPct = Math.min(100, (workspace.usedBytes / workspace.storageLimitBytes) * 100);
   const timeLeftMs = workspace.expiresAt - Date.now();
   const hoursLeft = Math.max(0, timeLeftMs / 3_600_000);
