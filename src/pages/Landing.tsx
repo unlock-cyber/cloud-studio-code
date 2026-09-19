@@ -317,6 +317,14 @@ export default function Landing() {
           <span className="inline-flex items-start gap-1">
             Cloud Studio Code
             <BetaBadge className="-translate-y-0.5" />
+            <span aria-hidden="true">·</span>
+            <button
+              type="button"
+              className="underline-offset-2 transition-colors hover:text-foreground hover:underline"
+              onClick={() => navigate("/about")}
+            >
+              About
+            </button>
           </span>
           <span>Python · C++ · Java · TypeScript · SQL · Web</span>
         </div>
