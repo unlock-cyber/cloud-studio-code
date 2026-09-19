@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { BetaBadge } from "@/components/BetaBadge";
 import { BrandMark } from "@/components/BrandMark";
-import { TerminalSquare, Check } from "lucide-react";
+import { TerminalSquare, Check, AlertTriangle } from "lucide-react";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useMutation } from "convex/react";
@@ -59,6 +59,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     | "transferring"
     | "transferred"
     | "redirecting"
+    | "transfer-failed"
   >(null);
   const migrate = useMutation(api.migrateWorkspace.migrateFromGuest);
 
@@ -130,33 +131,46 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
           setUpgradeStage("signed-in");
           // Step 2: transferring the workspace (mutation in flight).
           setUpgradeStage("transferring");
-          const result = await migrate({
-            guestWorkspaceId: guest.workspaceId as never,
-            guestSessionId: guest.sessionId,
-          });
-          // Only clear after a successful move — on failure the context stays
-          // so the user can retry without losing the transfer.
-          clearGuestContext();
-          if (result?.reason === "workspace-not-found") {
-            // The guest workspace no longer exists (expired mid-flight); the
-            // guest data is already gone server-side — nothing was lost, so
-            // enter the app normally.
+          let result: { migrated: boolean; reason?: string } | null = null;
+          try {
+            result = await migrate({
+              guestWorkspaceId: guest.workspaceId as never,
+              guestSessionId: guest.sessionId,
+            });
+          } catch {
+            // The mutation is atomic: nothing was written server-side, so the
+            // guest workspace/projects/files are fully preserved and the user
+            // can retry. Show the failure state — never a false success.
             migrationPendingRef.current = false;
-            navigate("/dashboard");
+            setUpgradeStage("transfer-failed");
+            setIsLoading(false);
             return;
           }
-          // Step 3 done: the move AND the guest-identity cleanup (sessions,
-          // account, user record) completed atomically inside the mutation.
+          if (result === null || !result.migrated) {
+            // Explicit non-success from the mutation (e.g. the guest
+            // workspace no longer exists, or the target already has content).
+            // Either way the guest data was NOT moved — report failure and
+            // keep the guest context so it can be retried.
+            migrationPendingRef.current = false;
+            setUpgradeStage("transfer-failed");
+            setIsLoading(false);
+            return;
+          }
+          // Step 3 done: the move completed inside the mutation. Clear the
+          // guest context only now that the transfer is confirmed.
+          clearGuestContext();
           setUpgradeStage("transferred");
-          // Step 4: full page reload directly to /dashboard so the
-          // authenticated workspace loads from a completely fresh state.
+          // Step 4: the mutation's atomic cleanup (guest sessions, account,
+          // user record) committed together with the move, so cleanup is
+          // confirmed complete only now — show the redirecting state.
           setUpgradeStage("redirecting");
           migrationPendingRef.current = false;
           window.location.assign("/dashboard");
           return;
         } catch (e) {
           migrationPendingRef.current = false;
-          setUpgradeStage(null);
+          setUpgradeStage("transfer-failed");
+          setIsLoading(false);
           throw e;
         }
       }
@@ -176,7 +190,6 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       );
       setIsLoading(false);
       setOtp("");
-      setUpgradeStage(null);
     }
   };
 
@@ -364,44 +377,64 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     </InputOTP>
                   </div>
                   {error && <p className="mt-3 text-center text-sm text-red-500">{error}</p>}
-                  {upgradeStage && (
+                  {upgradeStage === "transfer-failed" ? (
                     <div
-                      className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5"
-                      role="status"
-                      aria-live="polite"
+                      className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5"
+                      role="alert"
                     >
-                      <ul className="space-y-1.5 text-xs">
-                        <UpgradeStageRow
-                          label="Signed in successfully"
-                          state={stageAtLeast(upgradeStage, "signed-in") ? "done" : "pending"}
-                        />
-                        <UpgradeStageRow
-                          label="Transferring your projects and files..."
-                          state={
-                            stageAtLeast(upgradeStage, "transferred")
-                              ? "done"
-                              : upgradeStage === "transferring"
-                                ? "active"
-                                : "pending"
-                          }
-                        />
-                        <UpgradeStageRow
-                          label="Transfer successful"
-                          state={stageAtLeast(upgradeStage, "transferred") ? "done" : "pending"}
-                        />
-                        <UpgradeStageRow
-                          label="Redirecting to /dashboard..."
-                          state={upgradeStage === "redirecting" ? "active" : "pending"}
-                        />
-                      </ul>
+                      <p className="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+                        <AlertTriangle className="size-3.5 shrink-0" />
+                        Transfer could not be completed
+                      </p>
+                      <p className="mt-1.5 text-xs leading-relaxed text-amber-700/90 dark:text-amber-200/90">
+                        Your guest workspace and all of its projects and files have been
+                        preserved. You can safely retry — nothing was lost.
+                      </p>
                     </div>
+                  ) : (
+                    upgradeStage && (
+                      <div
+                        className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        <ul className="space-y-1.5 text-xs">
+                          <UpgradeStageRow
+                            label="Signed in successfully"
+                            state={stageAtLeast(upgradeStage, "signed-in") ? "done" : "pending"}
+                          />
+                          <UpgradeStageRow
+                            label="Transferring your projects and files..."
+                            state={
+                              stageAtLeast(upgradeStage, "transferred")
+                                ? "done"
+                                : upgradeStage === "transferring"
+                                  ? "active"
+                                  : "pending"
+                            }
+                          />
+                          <UpgradeStageRow
+                            label="Transfer successful"
+                            state={stageAtLeast(upgradeStage, "transferred") ? "done" : "pending"}
+                          />
+                          <UpgradeStageRow
+                            label="Redirecting to /dashboard..."
+                            state={upgradeStage === "redirecting" ? "active" : "pending"}
+                          />
+                        </ul>
+                      </div>
+                    )
                   )}
                   <Button
                     type="submit"
                     className="mt-5 w-full bg-emerald-600 text-white hover:bg-emerald-500"
-                    disabled={isLoading || otp.length !== 6 || !!upgradeStage}
+                    disabled={isLoading || otp.length !== 6 || !!upgradeStage && upgradeStage !== "transfer-failed"}
                   >
-                    {upgradeStage ? "Upgrading your workspace…" : isLoading ? "Verifying…" : "Verify and continue"}
+                    {upgradeStage && upgradeStage !== "transfer-failed"
+                      ? "Upgrading your workspace…"
+                      : isLoading
+                        ? "Verifying…"
+                        : "Verify and continue"}
                   </Button>
                   <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                     <button
@@ -432,9 +465,14 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
 // Ordered stages of the guest → account upgrade, used to derive per-row state.
 const UPGRADE_STAGE_ORDER = ["signed-in", "transferring", "transferred", "redirecting"] as const;
 
-type UpgradeStage = (typeof UPGRADE_STAGE_ORDER)[number];
+type UpgradeStage =
+  | (typeof UPGRADE_STAGE_ORDER)[number]
+  | "transfer-failed";
 
-function stageAtLeast(current: UpgradeStage, stage: UpgradeStage): boolean {
+function stageAtLeast(
+  current: Exclude<UpgradeStage, "transfer-failed">,
+  stage: Exclude<UpgradeStage, "transfer-failed">,
+): boolean {
   return UPGRADE_STAGE_ORDER.indexOf(current) >= UPGRADE_STAGE_ORDER.indexOf(stage);
 }
 
