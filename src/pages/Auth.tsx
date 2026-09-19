@@ -91,6 +91,13 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     event.preventDefault();
     setIsLoading(true);
     setError(null);
+    // A guest is about to authenticate: from this moment the redirect effect
+    // below is suppressed. `signIn` flips auth state reactively, and letting
+    // the effect fire in that window would send the app to /dashboard and
+    // provision a fresh empty authenticated workspace BEFORE the guest
+    // migration has run — stranding the guest data. The suppression lasts
+    // until the migration finishes (success or failure).
+    if (captureGuestContext()) migrationPendingRef.current = true;
     try {
       const formData = new FormData(event.currentTarget);
       await signIn("email-otp", formData);
