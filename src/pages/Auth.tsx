@@ -51,6 +51,15 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Real staged status during the guest → account transition. Each stage is
+  // only shown AFTER the corresponding operation has actually completed.
+  const [upgradeStage, setUpgradeStage] = useState<
+    | null
+    | "signed-in"
+    | "transferring"
+    | "transferred"
+    | "redirecting"
+  >(null);
   const migrate = useMutation(api.migrateWorkspace.migrateFromGuest);
 
   // Guest-upgrade bookkeeping: while the guest workspace migration is in
@@ -106,9 +115,9 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
 
       // Guest upgrade: the OTP sign-in created a fresh registered user, so
       // move the guest workspace (all projects/files/databases) into it now —
-      // BEFORE entering the dashboard — so the authenticated workspace shows
-      // up immediately, with no refresh. Atomic server-side: on failure the
-      // guest data is untouched and we stay here with a clear error.
+      // BEFORE entering the dashboard. The migration is atomic server-side:
+      // on failure the guest data is untouched and we stay here with a clear
+      // error.
       //
       // The redirect effect is suppressed while this runs (migrationPendingRef),
       // because `isAuthenticated` has already flipped true by the time signIn
@@ -117,6 +126,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       if (guest) {
         migrationPendingRef.current = true;
         try {
+          // Step 1 done: the session is authenticated.
+          setUpgradeStage("signed-in");
+          // Step 2: transferring the workspace (mutation in flight).
+          setUpgradeStage("transferring");
           const result = await migrate({
             guestWorkspaceId: guest.workspaceId as never,
             guestSessionId: guest.sessionId,
@@ -124,16 +137,26 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
           // Only clear after a successful move — on failure the context stays
           // so the user can retry without losing the transfer.
           clearGuestContext();
-          migrationPendingRef.current = false;
           if (result?.reason === "workspace-not-found") {
             // The guest workspace no longer exists (expired mid-flight); the
             // guest data is already gone server-side — nothing was lost, so
             // enter the app normally.
+            migrationPendingRef.current = false;
             navigate("/dashboard");
             return;
           }
+          // Step 3 done: the move AND the guest-identity cleanup (sessions,
+          // account, user record) completed atomically inside the mutation.
+          setUpgradeStage("transferred");
+          // Step 4: full page reload directly to /dashboard so the
+          // authenticated workspace loads from a completely fresh state.
+          setUpgradeStage("redirecting");
+          migrationPendingRef.current = false;
+          window.location.assign("/dashboard");
+          return;
         } catch (e) {
           migrationPendingRef.current = false;
+          setUpgradeStage(null);
           throw e;
         }
       }
@@ -153,6 +176,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       );
       setIsLoading(false);
       setOtp("");
+      setUpgradeStage(null);
     }
   };
 
@@ -340,12 +364,44 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     </InputOTP>
                   </div>
                   {error && <p className="mt-3 text-center text-sm text-red-500">{error}</p>}
+                  {upgradeStage && (
+                    <div
+                      className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <ul className="space-y-1.5 text-xs">
+                        <UpgradeStageRow
+                          label="Signed in successfully"
+                          state={stageAtLeast(upgradeStage, "signed-in") ? "done" : "pending"}
+                        />
+                        <UpgradeStageRow
+                          label="Transferring your projects and files..."
+                          state={
+                            stageAtLeast(upgradeStage, "transferred")
+                              ? "done"
+                              : upgradeStage === "transferring"
+                                ? "active"
+                                : "pending"
+                          }
+                        />
+                        <UpgradeStageRow
+                          label="Transfer successful"
+                          state={stageAtLeast(upgradeStage, "transferred") ? "done" : "pending"}
+                        />
+                        <UpgradeStageRow
+                          label="Redirecting to /dashboard..."
+                          state={upgradeStage === "redirecting" ? "active" : "pending"}
+                        />
+                      </ul>
+                    </div>
+                  )}
                   <Button
                     type="submit"
                     className="mt-5 w-full bg-emerald-600 text-white hover:bg-emerald-500"
-                    disabled={isLoading || otp.length !== 6}
+                    disabled={isLoading || otp.length !== 6 || !!upgradeStage}
                   >
-                    {isLoading ? "Verifying…" : "Verify and continue"}
+                    {upgradeStage ? "Upgrading your workspace…" : isLoading ? "Verifying…" : "Verify and continue"}
                   </Button>
                   <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                     <button
@@ -370,6 +426,35 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
         </div>
       </main>
     </div>
+  );
+}
+
+// Ordered stages of the guest → account upgrade, used to derive per-row state.
+const UPGRADE_STAGE_ORDER = ["signed-in", "transferring", "transferred", "redirecting"] as const;
+
+type UpgradeStage = (typeof UPGRADE_STAGE_ORDER)[number];
+
+function stageAtLeast(current: UpgradeStage, stage: UpgradeStage): boolean {
+  return UPGRADE_STAGE_ORDER.indexOf(current) >= UPGRADE_STAGE_ORDER.indexOf(stage);
+}
+
+function UpgradeStageRow({ label, state }: { label: string; state: "pending" | "active" | "done" }) {
+  return (
+    <li
+      className={
+        "flex items-center gap-2 " +
+        (state === "pending" ? "text-muted-foreground" : "text-emerald-700 dark:text-emerald-300")
+      }
+    >
+      {state === "done" ? (
+        <Check className="size-3.5 shrink-0" />
+      ) : state === "active" ? (
+        <span className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-emerald-500/30 border-t-emerald-500" />
+      ) : (
+        <span className="size-3.5 shrink-0 rounded-full border border-border" />
+      )}
+      {label}
+    </li>
   );
 }
 

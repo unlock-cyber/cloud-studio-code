@@ -16,6 +16,16 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -125,6 +135,7 @@ export default function Dashboard() {
     workspace !== undefined && (workspace === null || workspace.expiredNow);
   const workspaceExpired = workspace?.expiredNow ?? false;
   const [provisioning, setProvisioning] = useState(false);
+  const [guestUpgradeOpen, setGuestUpgradeOpen] = useState(false);
   const provisionedRef = useRef(false);
   useEffect(() => {
     if (!isAuthenticated || !workspaceMissing || provisioning || provisionedRef.current) return;
@@ -319,7 +330,7 @@ export default function Dashboard() {
               </Button>
             )}
             {isGuest && (
-              <Button size="sm" className="h-8 gap-1.5" onClick={() => navigate("/auth?returnTo=/dashboard")}>
+              <Button size="sm" className="h-8 gap-1.5" onClick={() => setGuestUpgradeOpen(true)}>
                 <LogIn className="size-3.5" /> Create account
               </Button>
             )}
@@ -519,6 +530,37 @@ export default function Dashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Guest → account upgrade warning */}
+      <AlertDialog open={guestUpgradeOpen} onOpenChange={setGuestUpgradeOpen}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <LogIn className="size-4 text-emerald-600 dark:text-emerald-400" /> Switch to a registered account?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-left leading-relaxed">
+              <span className="block">
+                You are currently in a <strong>guest workspace</strong>. Creating an account will
+                sign you in and transfer your guest projects and files into your new account
+                automatically.
+              </span>
+              <span className="block">
+                As a precaution, we recommend <strong>exporting your projects</strong> first —
+                exported projects can be imported again later at any time.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-emerald-600 text-white hover:bg-emerald-500"
+              onClick={() => navigate("/auth")}
+            >
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Toast */}
       {toast && (
