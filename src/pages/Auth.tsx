@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { BrandMark } from "@/components/BrandMark";
 import { TerminalSquare, Check } from "lucide-react";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -52,6 +52,13 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const [error, setError] = useState<string | null>(null);
   const migrate = useMutation(api.migrateWorkspace.migrateFromGuest);
 
+  // Guest-upgrade bookkeeping: while the guest workspace migration is in
+  // flight, the auth state has ALREADY flipped to the new registered user —
+  // the redirect effect below must hold off until the migration finishes,
+  // otherwise the dashboard provisions a fresh empty workspace first and the
+  // guest data never gets moved.
+  const migrationPendingRef = useRef(false);
+
   useEffect(() => {
     // Registered users visiting /auth while signed in are bounced to the app,
     // but guests must NOT be redirected — they come here to upgrade to a
@@ -60,6 +67,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     // sign-in the session switches, and acting on a stale/undefined user
     // could send the fresh registered user back to a guest-era path.
     if (authLoading || user === undefined) return;
+    if (migrationPendingRef.current) return;
     if (!isAuthenticated || !!user && user.isAnonymous) return;
     // Enter the authenticated app at the dashboard. Never honor a `returnTo`
     // captured under a previous session (e.g. a guest workspace path — its
@@ -100,15 +108,33 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       // BEFORE entering the dashboard — so the authenticated workspace shows
       // up immediately, with no refresh. Atomic server-side: on failure the
       // guest data is untouched and we stay here with a clear error.
+      //
+      // The redirect effect is suppressed while this runs (migrationPendingRef),
+      // because `isAuthenticated` has already flipped true by the time signIn
+      // resolves — navigating now would provision an empty workspace first.
       const guest = captureGuestContext();
       if (guest) {
-        await migrate({
-          guestWorkspaceId: guest.workspaceId as never,
-          guestSessionId: guest.sessionId,
-        });
-        // Only clear after a successful move — on failure the context stays
-        // so the user can retry without losing the transfer.
-        clearGuestContext();
+        migrationPendingRef.current = true;
+        try {
+          const result = await migrate({
+            guestWorkspaceId: guest.workspaceId as never,
+            guestSessionId: guest.sessionId,
+          });
+          // Only clear after a successful move — on failure the context stays
+          // so the user can retry without losing the transfer.
+          clearGuestContext();
+          migrationPendingRef.current = false;
+          if (result?.reason === "workspace-not-found") {
+            // The guest workspace no longer exists (expired mid-flight); the
+            // guest data is already gone server-side — nothing was lost, so
+            // enter the app normally.
+            navigate("/dashboard");
+            return;
+          }
+        } catch (e) {
+          migrationPendingRef.current = false;
+          throw e;
+        }
       }
 
       // OTP verification creates a fresh registered user/session — it does

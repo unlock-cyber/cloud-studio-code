@@ -276,7 +276,7 @@ check("handleTypedGt: XML overtype path (placeholder \">\" replaced, rangeLength
 
 check("handleTypedGt: HTML with a mock Monarch tokenizer (delimiter gate on)", () => {
   // Simulate monaco.editor.tokenize output for "<p>": one token per line.
-  const tokens = [[{ startIndex: 0, scopes: "tag.html" }]];
+  const tokens = [[{ offset: 0, type: "tag.html" }]];
   const r = handleTypedGt("<p>", 3, "html", 0, () => tokens, 0);
   // scopes don't include "delimiter" → typedGtIsTagEnd=false → no fire.
   assert.equal(r, null);
@@ -285,9 +285,9 @@ check("handleTypedGt: HTML with a mock Monarch tokenizer (delimiter gate on)", (
 check("handleTypedGt: HTML with proper delimiter tokens fires", () => {
   const tokens = [
     [
-      { startIndex: 0, scopes: "delimiter.html" },
-      { startIndex: 1, scopes: "tag.html" },
-      { startIndex: 2, scopes: "delimiter.html" },
+      { offset: 0, type: "delimiter.html" },
+      { offset: 1, type: "tag.html" },
+      { offset: 2, type: "delimiter.html" },
     ],
   ];
   const r = handleTypedGt("<p>", 3, "html", 0, () => tokens, 0);

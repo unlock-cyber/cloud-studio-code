@@ -85,29 +85,30 @@ export function toLines(text: string): { lines: string[]; lineStarts: number[] }
 const MASKED_SCOPES = new Set(["string", "comment", "regexp"]);
 
 /**
- * Builds a mask aligned with `text` from `monaco.editor.tokenize` output:
+ * Builds a mask aligned with `text` from `monaco.editor.tokenize` output
+ * (`Token[][]` with `{offset, type}` per line):
  * mask[offset] is true when the position sits inside a string, comment or
  * regexp token according to the language's own grammar.
  */
 export function buildMaskFromTokens(
   text: string,
   lineStarts: number[],
-  tokensPerLine: Array<Array<{ startIndex: number; scopes: string }>>,
+  tokensPerLine: Array<Array<{ offset: number; type: string }>>,
 ): boolean[] {
   const mask = new Array<boolean>(text.length).fill(false);
   for (let ln = 0; ln < tokensPerLine.length; ln++) {
     const base = lineStarts[ln] ?? 0;
     const toks = tokensPerLine[ln] ?? [];
     for (let t = 0; t < toks.length; t++) {
-      const start = base + toks[t].startIndex;
+      const start = base + (toks[t].offset ?? 0);
       let end: number;
       if (t + 1 < toks.length) {
-        end = base + toks[t + 1].startIndex;
+        end = base + (toks[t + 1].offset ?? 0);
       } else {
         const nl = text.indexOf("\n", base);
         end = nl === -1 ? text.length : nl;
       }
-      const isMasked = toks[t].scopes.split(".").some((s) => MASKED_SCOPES.has(s));
+      const isMasked = toks[t].type.split(".").some((s) => MASKED_SCOPES.has(s));
       if (!isMasked) continue;
       for (let i = start; i < Math.min(end, text.length); i++) mask[i] = true;
     }
@@ -115,9 +116,11 @@ export function buildMaskFromTokens(
   return mask;
 }
 
-/** True when the Monarch scope string marks a tag delimiter ("<" or ">"). */
+/** True when a token `type` (e.g. "delimiter.html") marks a tag delimiter
+ *  ("<" or ">"). Delimiters are emitted as exactly "delimiter" or
+ *  "delimiter.<lang>" by the HTML/XML grammars. */
 export function scopeIsTagDelimiter(scope: string): boolean {
-  return scope.split(".").some((s) => s === "delimiter");
+  return scope === "delimiter" || /^delimiter\.[^.]+$/.test(scope);
 }
 
 /**
@@ -485,9 +488,10 @@ export function decideTagClose(
 // Editor-facing orchestration (kept pure & unit-testable).
 // ---------------------------------------------------------------------
 
-/** Monarch token shape actually returned by `monaco.editor.tokenize`.
- *  (Monaco's .d.ts claims `{offset,type}` — a long-standing typings bug.) */
-export type MonarchToken = { startIndex: number; scopes: string };
+/** Token shape actually returned by `monaco.editor.tokenize`: each token
+ *  carries its start `offset` within the line and its dot-path `type`
+ *  (e.g. "delimiter.html", "attribute.value", "metatag.html"). */
+export type MonarchToken = { offset: number; type: string };
 
 /** Signature of `monaco.editor.tokenize`. May be undefined in runtimes
  *  where the AMD-loaded Monaco build doesn't expose it. */
@@ -557,13 +561,13 @@ export function typedGtIsDelimiter(
   if (mLang !== "html" && mLang !== "xml") return true;
   if (!tokensForLine) return true;
   for (let t = 0; t < tokensForLine.length; t++) {
-    const start = tokensForLine[t].startIndex;
+    const start = tokensForLine[t].offset ?? 0;
     const end =
       t + 1 < tokensForLine.length
-        ? tokensForLine[t + 1].startIndex
+        ? (tokensForLine[t + 1].offset ?? 0)
         : line.length;
     if (idx >= start && idx < end) {
-      return scopeIsTagDelimiter(tokensForLine[t].scopes);
+      return scopeIsTagDelimiter(tokensForLine[t].type);
     }
   }
   return true;
