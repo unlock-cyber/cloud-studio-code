@@ -4,6 +4,7 @@ import { useMutation, useQuery, useAction, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
+import { BetaBadge } from "@/components/BetaBadge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
@@ -301,7 +302,10 @@ export default function Dashboard() {
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
           <div className="flex items-center gap-2">
             <TerminalSquare className="size-5 text-primary" />
-            <span className="font-semibold">Cloud Studio Code</span>
+            <span className="inline-flex items-start gap-1">
+              <span className="font-semibold">Cloud Studio Code</span>
+              <BetaBadge className="-translate-y-1" />
+            </span>
           </div>
           <div className="ml-auto flex items-center gap-2">
             <Badge variant={isGuest ? "secondary" : "default"} className="text-[11px]">

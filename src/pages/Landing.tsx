@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { BetaBadge } from "@/components/BetaBadge";
 import { useNavigate } from "react-router";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -143,7 +144,10 @@ export default function Landing() {
         <div className="mx-auto flex h-14 max-w-6xl items-center px-4">
           <div className="flex items-center gap-2">
             <TerminalSquare className="size-5 text-emerald-500 dark:text-emerald-400" />
-            <span className="font-semibold">Cloud Studio Code</span>
+            <span className="inline-flex items-start gap-1">
+              <span className="font-semibold">Cloud Studio Code</span>
+              <BetaBadge className="-translate-y-1" />
+            </span>
           </div>
           <nav className="ml-auto flex items-center gap-1">
             {showDashAction ? (
@@ -310,7 +314,10 @@ export default function Landing() {
 
       <footer className="border-t border-border/60 py-8">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 text-xs text-muted-foreground">
-          <span>Cloud Studio Code</span>
+          <span className="inline-flex items-start gap-1">
+            Cloud Studio Code
+            <BetaBadge className="-translate-y-0.5" />
+          </span>
           <span>Python · C++ · Java · TypeScript · SQL · Web</span>
         </div>
       </footer>

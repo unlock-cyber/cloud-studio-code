@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useAuth } from "@/hooks/use-auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { BetaBadge } from "@/components/BetaBadge";
 import { BrandMark } from "@/components/BrandMark";
 import { TerminalSquare, Check } from "lucide-react";
 import { Suspense, useEffect, useRef, useState } from "react";
@@ -194,7 +195,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
           className="flex items-center gap-2 rounded-md py-1 pr-2 text-sm font-semibold transition-colors hover:text-emerald-600 dark:hover:text-emerald-400"
         >
           <TerminalSquare className="size-5 text-emerald-500 dark:text-emerald-400" />
-          Cloud Studio Code
+          <span className="inline-flex items-start gap-1">
+            Cloud Studio Code
+            <BetaBadge className="-translate-y-1" />
+          </span>
         </button>
         <div className="flex items-center gap-1">
           <ThemeToggle />
