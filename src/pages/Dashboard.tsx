@@ -54,7 +54,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { formatBytesClient, formatDate } from "@/lib/clientHelpers";
 import { TEMPLATE_PICKER } from "@/lib/projectTemplates";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { storeGuestContext } from "@/lib/guestContext";
+import { storeGuestContext, captureGuestContext } from "@/lib/guestContext";
 import { useAuthToken } from "@convex-dev/auth/react";
 
 const TEMPLATE_META_LABEL: Record<string, string> = {
@@ -554,7 +554,25 @@ export default function Dashboard() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="bg-emerald-600 text-white hover:bg-emerald-500"
-              onClick={() => navigate("/auth")}
+              onClick={() => {
+                // Re-stamp the guest context at the moment of confirmation —
+                // guarantees a fresh capture (id + session + timestamp) even
+                // if the background effect missed it or the entry went stale.
+                if (isGuest && providerToken && workspace) {
+                  const sessionId = (() => {
+                    try {
+                      const payload = JSON.parse(atob(providerToken.split(".")[1]));
+                      return typeof payload.sessionId === "string" ? payload.sessionId : "";
+                    } catch {
+                      return "";
+                    }
+                  })();
+                  if (sessionId) {
+                    storeGuestContext({ workspaceId: workspace._id, sessionId });
+                  }
+                }
+                navigate("/auth");
+              }}
             >
               Continue
             </AlertDialogAction>

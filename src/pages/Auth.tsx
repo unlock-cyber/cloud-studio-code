@@ -125,6 +125,12 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       // because `isAuthenticated` has already flipped true by the time signIn
       // resolves — navigating now would provision an empty workspace first.
       const guest = captureGuestContext();
+      // Attempt the migration whenever the guest context exists. When it is
+      // missing (e.g. storage was unavailable, or the entry expired), the
+      // previous anonymous session token still held by this client may allow
+      // the server to resolve the guest workspace — but only if the user was
+      // actually a guest before this sign-in, which we cannot know reliably
+      // here, so we only migrate when we have positive context.
       if (guest) {
         migrationPendingRef.current = true;
         try {
