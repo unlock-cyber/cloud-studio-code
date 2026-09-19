@@ -7,6 +7,7 @@ import { BetaBadge } from "@/components/BetaBadge";
 import { BrandMark } from "@/components/BrandMark";
 import { TerminalSquare, Check, AlertTriangle } from "lucide-react";
 import { Suspense, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -162,10 +163,18 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
           setUpgradeStage("transferred");
           // Step 4: the mutation's atomic cleanup (guest sessions, account,
           // user record) committed together with the move, so cleanup is
-          // confirmed complete only now — show the redirecting state.
-          setUpgradeStage("redirecting");
-          migrationPendingRef.current = false;
-          window.location.assign("/dashboard");
+          // confirmed complete only now. Render the redirecting status
+          // SYNCHRONOUSLY (React state updates are otherwise async and the
+          // navigation below would beat the re-render, hiding the message).
+          flushSync(() => {
+            setUpgradeStage("redirecting");
+          });
+          // Full page reload directly to /dashboard. `replace` prevents the
+          // dead guest session from lingering in history. NOTE: do NOT reset
+          // migrationPendingRef here — keeping the auth-redirect effect
+          // suppressed guarantees no SPA navigation can race the unload and
+          // leave the user on stale guest UI.
+          window.location.replace("/dashboard");
           return;
         } catch (e) {
           migrationPendingRef.current = false;
