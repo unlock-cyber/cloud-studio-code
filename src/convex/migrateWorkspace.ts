@@ -3,7 +3,7 @@
 // The email-OTP flow creates a brand-new registered user + session; it never
 // links to the previous anonymous user. This mutation runs right after the
 // OTP sign-in succeeds (while the NEW session is active) and, inside one
-// transaction, moves the previous guest workspace — with every project, file
+// transaction, MOVES the previous guest workspace — with every project, file
 // and SQL database it contains — to the new user, then deletes the guest
 // session(s), auth account and the guest user record itself.
 //
@@ -15,8 +15,12 @@
 //    throws instead of moving someone else's data.
 //  - Everything (ownership move + guest cleanup) commits atomically. If any
 //    step fails, nothing is written and the guest data stays intact.
-//  - The guest user's other data is not referenced anywhere else: projects
-//    and files hang off the workspace doc, which is re-owned, not copied.
+//  - Guest data is never silently discarded: if the target workspace already
+//    exists (provisioned empty by the dashboard after auth), the guest's
+//    projects/files are MOVED into it (only when the target is empty), so
+//    nothing is left behind.
+//  - Successful authentication alone is never treated as a successful
+//    migration — the migration result is explicit ({ migrated: true/false }).
 
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { mutation, type MutationCtx } from "./_generated/server";
@@ -27,6 +31,16 @@ import {
   REGISTERED_LIMIT_BYTES,
 } from "./workspaces";
 
+type WorkspaceDoc = {
+  _id: Id<"workspaces">;
+  userId: Id<"users">;
+  kind: "guest" | "registered";
+  usedBytes: number;
+  editorTheme?: "dark" | "light";
+  fontSize?: number;
+  wordWrap?: boolean;
+};
+
 export const migrateFromGuest = mutation({
   args: {
     guestWorkspaceId: v.id("workspaces"),
@@ -35,7 +49,10 @@ export const migrateFromGuest = mutation({
     // unreadable tokens), but when present it is strictly verified.
     guestSessionId: v.optional(v.string()),
   },
-  handler: async (ctx, { guestWorkspaceId, guestSessionId }) => {
+  handler: async (
+    ctx,
+    { guestWorkspaceId, guestSessionId },
+  ): Promise<{ migrated: boolean; reason?: string }> => {
     // 1. The caller must be a registered (non-anonymous) user — i.e. the
     //    fresh session created by the OTP sign-in.
     const authUserId = await getAuthUserId(ctx);
@@ -48,77 +65,45 @@ export const migrateFromGuest = mutation({
       throw new Error("Migration requires a registered account");
     }
 
-    // 2. The new user must not already own a workspace (one per user).
-    //    If one exists (e.g. provisioned empty by the dashboard before the
-    //    migration could run), we can still complete the migration by moving
-    //    the guest's projects into it — but ONLY when the target has no
-    //    projects, so nothing is ever duplicated or merged.
-    const existingTarget = await ctx.db
-      .query("workspaces")
-      .withIndex("by_user", (q) => q.eq("userId", authUserId))
-      .first();
-    if (existingTarget) {
-      const existingProjects = await ctx.db
-        .query("projects")
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", existingTarget._id))
-        .collect();
-      if (existingProjects.length > 0) {
-        return { migrated: false as const, reason: "target-already-exists" };
-      }
-
-      // Load the guest workspace and verify it before re-pointing anything.
-      const ws = await ctx.db.get(guestWorkspaceId);
-      if (!ws) {
-        return { migrated: false as const, reason: "workspace-not-found" };
-      }
-      const guestUser = await ctx.db.get(ws.userId);
-      if (!guestUser || !guestUser.isAnonymous) {
-        throw new Error("Refusing to migrate a non-guest workspace");
-      }
-      if (guestSessionId) {
-        const ok = await sessionBelongsTo(guestSessionId, ws.userId, ctx);
-        if (!ok) throw new Error("Workspace does not belong to the given guest session");
-      }
-
-      // Move every guest project into the existing (empty) target workspace.
-      const guestProjects = await ctx.db
-        .query("projects")
-        .withIndex("by_workspace", (q) => q.eq("workspaceId", ws._id))
-        .collect();
-      for (const p of guestProjects) {
-        await ctx.db.patch(p._id, { workspaceId: existingTarget._id });
-      }
-      await ctx.db.patch(existingTarget._id, {
-        usedBytes: ws.usedBytes,
-        editorTheme: ws.editorTheme,
-        fontSize: ws.fontSize,
-        wordWrap: ws.wordWrap,
-      });
-
-      // Guest identity cleanup — data is already safe under the new owner.
-      await deleteGuestIdentity(ctx, ws.userId);
-      // The now-empty guest workspace is no longer needed.
-      await ctx.db.delete(ws._id);
-
-      return { migrated: true as const, reason: "merged-into-empty-target" };
+    // 2. Resolve the guest workspace. Prefer the id captured by the client;
+    //    if it is stale/missing, fall back to "the workspace owned by the
+    //    anonymous user the client still remembers" via the session id.
+    let ws: WorkspaceDoc | null = null;
+    try {
+      ws = (await ctx.db.get(guestWorkspaceId)) as WorkspaceDoc | null;
+    } catch {
+      ws = null;
     }
-
-    // 3. Load the guest workspace + its owner.
-    const ws = await ctx.db.get(guestWorkspaceId);
+    if (!ws && guestSessionId) {
+      const guestUserIdFromSession = await userIdFromSession(
+        guestSessionId,
+        ctx,
+      );
+      if (guestUserIdFromSession) {
+        const candidate = (await ctx.db
+          .query("workspaces")
+          .withIndex("by_user", (q) => q.eq("userId", guestUserIdFromSession))
+          .first()) as WorkspaceDoc | null;
+        if (candidate && candidate.kind === "guest") ws = candidate;
+      }
+    }
     if (!ws) {
-      return { migrated: false as const, reason: "workspace-not-found" };
+      // Nothing to migrate — the guest workspace no longer exists. Do NOT
+      // treat this as migration success; report it so the client can decide.
+      return { migrated: false, reason: "workspace-not-found" };
     }
+
+    // 3. Verify ownership: the workspace must belong to an anonymous user,
+    //    and the provided guest session id (when present) must belong to
+    //    that user.
     const guestUser = await ctx.db.get(ws.userId);
     if (!guestUser) {
-      return { migrated: false as const, reason: "owner-not-found" };
+      return { migrated: false, reason: "owner-not-found" };
     }
     if (!guestUser.isAnonymous) {
       // Never move a registered user's workspace.
       throw new Error("Refusing to migrate a non-guest workspace");
     }
-
-    // 4. Ownership proof: the session id the client captured before sign-in
-    //    must belong to the workspace's owner.
     if (guestSessionId) {
       const ok = await sessionBelongsTo(guestSessionId, ws.userId, ctx);
       if (!ok) {
@@ -126,42 +111,101 @@ export const migrateFromGuest = mutation({
       }
     }
 
-    // 5. Move the workspace (and transitively everything that hangs off it)
-    //    to the new user, upgrading it to the registered tier.
-    const now = Date.now();
-    await ctx.db.patch(ws._id, {
-      userId: authUserId,
-      kind: "registered",
-      storageLimitBytes: REGISTERED_LIMIT_BYTES,
-      inactivityLimitMs: REGISTERED_INACTIVITY_MS,
-      expiresAt: now + REGISTERED_INACTIVITY_MS,
-    });
+    // 4. Determine the target workspace for the new registered user.
+    const existingTarget = (await ctx.db
+      .query("workspaces")
+      .withIndex("by_user", (q) => q.eq("userId", authUserId))
+      .first()) as WorkspaceDoc | null;
 
-    // 6. Delete the guest session(s), auth account(s) and the guest user.
-    //    The workspace's data is already safe under the new owner, so removing
-    //    the guest identity cannot lose anything.
+    let targetId: Id<"workspaces">;
+    if (existingTarget) {
+      // A workspace was already provisioned for the registered account
+      // (e.g. by the dashboard's provisioning gate after auth). We may still
+      // complete the MOVE — but ONLY when the target has no projects, so
+      // nothing can be duplicated, merged or overwritten.
+      const existingProjects = await ctx.db
+        .query("projects")
+        .withIndex("by_workspace", (q) => q.eq("workspaceId", existingTarget._id))
+        .collect();
+      if (existingProjects.length > 0) {
+        // Refuse: the target already has content and a move would conflict.
+        return { migrated: false, reason: "target-already-exists" };
+      }
+      targetId = existingTarget._id;
+      // Adopt the guest workspace's settings and usage into the target.
+      await ctx.db.patch(existingTarget._id, {
+        usedBytes: ws.usedBytes,
+        editorTheme: ws.editorTheme ?? existingTarget.editorTheme,
+        fontSize: ws.fontSize ?? existingTarget.fontSize,
+        wordWrap: ws.wordWrap ?? existingTarget.wordWrap,
+      });
+    } else {
+      // 5. MOVE the workspace itself to the new user, upgrading it to the
+      //    registered tier. Projects, files and SQL databases all hang off
+      //    the workspace id, so re-owning this one doc transitively moves
+      //    everything — a true MOVE, not a copy.
+      const now = Date.now();
+      await ctx.db.patch(ws._id, {
+        userId: authUserId,
+        kind: "registered",
+        storageLimitBytes: REGISTERED_LIMIT_BYTES,
+        inactivityLimitMs: REGISTERED_INACTIVITY_MS,
+        expiresAt: now + REGISTERED_INACTIVITY_MS,
+      });
+      targetId = ws._id;
+    }
+
+    // 6. Explicitly re-point every guest project to the target workspace,
+    //    preserving names, structure, settings and open-tabs/active-file
+    //    state. Files and SQL databases hang off project ids, so they move
+    //    with their projects untouched.
+    const guestProjects = await ctx.db
+      .query("projects")
+      .withIndex("by_workspace", (q) => q.eq("workspaceId", ws._id))
+      .collect();
+    for (const p of guestProjects) {
+      if (p.workspaceId !== targetId) {
+        await ctx.db.patch(p._id, { workspaceId: targetId });
+      }
+    }
+
+    // 7. The guest data is now fully owned by the registered user. Only NOW
+    //    is it safe to delete the guest identity (sessions, accounts, user
+    //    record) and — in the merged-into-target path — the emptied guest
+    //    workspace shell.
     await deleteGuestIdentity(ctx, ws.userId);
+    if (existingTarget && targetId !== ws._id) {
+      await ctx.db.delete(ws._id);
+    }
 
-    return { migrated: true as const };
+    return { migrated: true };
   },
 });
 
 /** Ownership proof: does `sessionId` resolve to a session owned by `userId`?
- *  Malformed ids are treated as absent (returns true — no proof required). */
+ *  Malformed ids are treated as absent (returns false only for a real
+ *  mismatch — an unreadable id imposes no proof). */
 async function sessionBelongsTo(
   sessionId: string,
   userId: Id<"users">,
   ctx: MutationCtx,
 ): Promise<boolean> {
-  let session: { userId: Id<"users"> } | null = null;
+  const session = await userIdFromSession(sessionId, ctx);
+  if (session === null) return true; // malformed/unknown id → no proof possible
+  return session === userId;
+}
+
+/** Resolves a session id to its owner user id, or null if malformed/gone. */
+async function userIdFromSession(
+  sessionId: string,
+  ctx: MutationCtx,
+): Promise<Id<"users"> | null> {
   try {
-    session = (await ctx.db.get(sessionId as Id<"authSessions">)) as
-      | { userId: Id<"users"> }
-      | null;
+    const session = await ctx.db.get(sessionId as Id<"authSessions">);
+    return session ? session.userId : null;
   } catch {
-    session = null;
+    return null;
   }
-  return !session || session.userId === userId;
 }
 
 /** Deletes the guest's sessions, auth accounts and user record. Call only
