@@ -150,12 +150,18 @@ export const signIn = mutation({
     const now = Date.now();
     let row = await ctx.db.query("backstageAuth").first();
     if (!row) {
-      // First run: create tracking row. No password is set until the operator
-      // sets one, so authentication is impossible (fail closed).
+      // First run: create the tracking row and continue in the same
+      // transaction. (Throwing here would roll the insert back and every
+      // future attempt would re-enter this branch.) Authentication still
+      // fails closed below if no password hash is configured.
       await ctx.db.insert("backstageAuth", {
         failedAttempts: 0,
         lastFailedAt: 0,
       });
+      row = await ctx.db.query("backstageAuth").first();
+    }
+
+    if (!row) {
       throw new Error("Access is not configured. Try again later.");
     }
 
