@@ -188,7 +188,7 @@ export default function Landing() {
             <Badge className="mb-5 border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-300">
               A real IDE in your browser
             </Badge>
-            <h1 className="text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
+            <h1 className="text-3xl font-bold leading-tight tracking-tight sm:text-5xl">
               Write, run and ship code
               <span className="text-emerald-600 dark:text-emerald-400"> without leaving the tab</span>
             </h1>
@@ -243,7 +243,7 @@ export default function Landing() {
               <span className="size-2.5 rounded-full bg-emerald-500/70" />
               <span className="ml-2 text-[11px] text-muted-foreground">main.py — Cloud Studio Code</span>
             </div>
-            <div className="p-4 font-mono text-[12.5px] leading-relaxed">
+            <div className="p-3 font-mono text-[11px] leading-relaxed sm:p-4 sm:text-[12.5px]">
               <p><span className="text-muted-foreground">$</span> <span className="text-emerald-600 dark:text-emerald-400">run main.py</span></p>
               <p className="mt-2 text-foreground/90">Python 3.12.0</p>
               <p className="text-foreground/90">fib(0) = 0</p>

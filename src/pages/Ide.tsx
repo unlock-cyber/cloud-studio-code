@@ -29,7 +29,37 @@ import {
   LayoutPanelLeft,
   Terminal as TerminalIcon,
   X,
+  Menu,
+  Globe,
+  MoreHorizontal,
 } from "lucide-react";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+/** Narrow-viewport detection for the IDE's mobile single-panel workflow. */
+function useIsNarrowViewport() {
+  const [isNarrow, setIsNarrow] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < 768,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsNarrow(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  return isNarrow;
+}
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useTheme } from "@/hooks/use-theme";
 import {
@@ -49,12 +79,6 @@ import {
   CommandGroup,
   CommandItem,
 } from "@/components/ui/command";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { FileExplorer } from "@/components/ide/FileExplorer";
 import { CodeEditor, type EditorTab } from "@/components/ide/CodeEditor";
 import { TerminalPanel, type TerminalLine } from "@/components/ide/TerminalPanel";
@@ -123,6 +147,13 @@ export default function Ide() {
   const [previewOpen, setPreviewOpen] = useState(true);
   const [terminalOpen, setTerminalOpen] = useState(true);
   const [explorerOpen, setExplorerOpen] = useState(true);
+  const isNarrow = useIsNarrowViewport();
+  // Mobile panel state: which full-screen panel is showing (editor by default).
+  // Explorer opens as a drawer over the editor; terminal/preview are dedicated
+  // full-width panels. State (terminal lines, preview HTML) lives above, so it
+  // is preserved when switching between panels.
+  const [mobilePanel, setMobilePanel] = useState<"editor" | "terminal" | "preview">("editor");
+  const [explorerDrawerOpen, setExplorerDrawerOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [newFileDialog, setNewFileDialog] = useState<{ isFolder: boolean } | null>(null);
   const [newFileName, setNewFileName] = useState("");
@@ -724,79 +755,238 @@ export default function Ide() {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
       {/* Title bar */}
-      <header className="flex h-11 shrink-0 items-center gap-2 border-b border-border/60 bg-background px-3">
+      <header className="flex h-11 shrink-0 items-center gap-1.5 border-b border-border/60 bg-background px-2 sm:px-3">
         <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-muted-foreground" onClick={() => navigate("/dashboard")}>
-          <ArrowLeft className="size-4" /> Projects
+          <ArrowLeft className="size-4" />
+          <span className="hidden sm:inline">Projects</span>
         </Button>
-        <div className="mx-1 h-4 w-px bg-border/60" />
-        <span className="text-sm font-medium">{project.name}</span>
-        <Badge variant="secondary" className="ml-1 text-[10px]">{project.language}</Badge>
-        {saving && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
+        <div className="mx-0.5 h-4 w-px shrink-0 bg-border/60" />
+        <span className="min-w-0 truncate text-sm font-medium">{project.name}</span>
+        <Badge variant="secondary" className="hidden shrink-0 text-[10px] sm:inline-flex">{project.language}</Badge>
+        {saving && <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />}
 
-        <div className="ml-auto flex items-center gap-1.5">
-          {/* RUN button */}
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          {/* RUN button — always accessible */}
           {runState === "running" || runState === "starting" ? (
             <Button size="sm" className="h-7 gap-1.5 bg-red-500/90 px-3 text-white hover:bg-red-500" onClick={handleStop}>
               <Square className="size-3.5" /> Stop
             </Button>
           ) : (
-            <Button size="sm" className="h-7 gap-1.5 bg-emerald-600 px-4 text-white hover:bg-emerald-500" onClick={() => handleRunRef.current?.()}>
+            <Button size="sm" className="h-7 gap-1.5 bg-emerald-600 px-3 text-white hover:bg-emerald-500" onClick={() => handleRunRef.current?.()}>
               <Play className="size-3.5 fill-current" /> Run
             </Button>
           )}
           <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={saveActive} title="Save (Ctrl+S)">
             <Save className="size-4" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={() => setNewFileDialog({ isFolder: false })} title="New file">
-            <FilePlus2 className="size-4" />
+
+          {/* Primary actions — always visible on mobile */}
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground md:hidden" onClick={() => setExplorerDrawerOpen(true)} title="Files">
+            <Menu className="size-4" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={() => setNewFileDialog({ isFolder: true })} title="New folder">
-            <FolderPlus className="size-4" />
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`h-7 w-7 p-0 md:hidden ${mobilePanel === "terminal" ? "text-sky-500" : "text-muted-foreground"}`}
+            onClick={() => setMobilePanel("terminal")}
+            title="Terminal"
+          >
+            <TerminalIcon className="size-4" />
           </Button>
-          <div className="mx-1 h-4 w-px bg-border/60" />
-          <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-muted-foreground" onClick={handleExport} disabled={exporting} title="Export as ZIP">
-            {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-4" />} Export
-          </Button>
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={() => setSettingsOpen(true)} title="Editor settings">
-            <Palette className="size-4" />
-          </Button>
-          <ThemeToggle theme={theme} onToggle={toggleAppTheme} />
-          <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 font-mono text-[11px] text-muted-foreground" onClick={() => setCommandOpen(true)}>
-            <Command className="size-3" /> K
-          </Button>
+          {previewAvailable && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`h-7 w-7 p-0 md:hidden ${mobilePanel === "preview" ? "text-sky-500" : "text-muted-foreground"}`}
+              onClick={() => setMobilePanel("preview")}
+              title="Preview"
+            >
+              <Globe className="size-4" />
+            </Button>
+          )}
+
+          {/* Desktop extras — collapsed into an overflow menu on mobile */}
+          <div className="hidden items-center gap-1.5 md:flex">
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={() => setNewFileDialog({ isFolder: false })} title="New file">
+              <FilePlus2 className="size-4" />
+            </Button>
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={() => setNewFileDialog({ isFolder: true })} title="New folder">
+              <FolderPlus className="size-4" />
+            </Button>
+            <div className="mx-1 h-4 w-px bg-border/60" />
+            <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-muted-foreground" onClick={handleExport} disabled={exporting} title="Export as ZIP">
+              {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-4" />} Export
+            </Button>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" title="More">
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem className="md:hidden" onClick={() => setNewFileDialog({ isFolder: false })}>
+                <FilePlus2 className="mr-2 size-3.5" /> New file
+              </DropdownMenuItem>
+              <DropdownMenuItem className="md:hidden" onClick={() => setNewFileDialog({ isFolder: true })}>
+                <FolderPlus className="mr-2 size-3.5" /> New folder
+              </DropdownMenuItem>
+              <div className="md:hidden">
+                <DropdownMenuItem onClick={handleExport} disabled={exporting}>
+                  {exporting ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : <Download className="mr-2 size-3.5" />} Export ZIP
+                </DropdownMenuItem>
+              </div>
+              <div className="hidden md:block">
+                <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
+                  <Palette className="mr-2 size-3.5" /> Editor settings
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setCommandOpen(true)}>
+                  <Command className="mr-2 size-3.5" /> Command palette
+                </DropdownMenuItem>
+              </div>
+              <div className="md:hidden">
+                <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
+                  <Palette className="mr-2 size-3.5" /> Editor settings
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setCommandOpen(true)}>
+                  <Command className="mr-2 size-3.5" /> Command palette
+                </DropdownMenuItem>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <div className="hidden sm:block">
+            <ThemeToggle theme={theme} onToggle={toggleAppTheme} />
+          </div>
         </div>
       </header>
 
       {/* Main body */}
       <div className="min-h-0 flex-1">
-        <PanelGroup direction="horizontal">
-          {explorerOpen && (
-            <>
-              <Panel defaultSize={20} minSize={12} maxSize={40}>
-                <FileExplorer
-                  files={allFiles}
-                  activeFile={activePath}
-                  openTabs={tabs.map((t) => t.path)}
-                  dirtyPaths={dirtyPaths}
-                  onOpenFile={openFile}
-                  onCreate={handleCreate}
-                  onRename={handleRename}
-                  onDelete={handleDelete}
-                  onDuplicate={handleDuplicate}
-                  onDownloadFile={handleDownloadFile}
-                />
-              </Panel>
-              <PanelResizeHandle className="w-px bg-border/60 data-[resize-handle-active]:bg-sky-500" />
-            </>
-          )}
+        {isNarrow ? (
+          /* ---------------- MOBILE: single-primary-panel workflow ---------------- */
+          <div className="flex h-full min-h-0 flex-col">
+            {mobilePanel === "editor" && (
+              <>
+                <div className="flex h-9 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border/60 bg-[#0D1117] px-1">
+                  {tabs.length === 0 && (
+                    <span className="px-3 text-xs text-muted-foreground/70">No open files</span>
+                  )}
+                  {tabs.map((t) => {
+                    const icon = fileIconMeta(t.path);
+                    const dirty = t.draft !== t.content;
+                    return (
+                      <div
+                        key={t.path}
+                        className={`group flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-t-md border-b-2 px-2.5 text-xs ${
+                          activePath === t.path
+                            ? "border-sky-500 bg-foreground/5 text-foreground"
+                            : "border-transparent text-muted-foreground hover:text-foreground/80"
+                        }`}
+                        onClick={() => openFile(t.path)}
+                      >
+                        <span className="rounded-sm px-0.5 text-[8px] font-bold" style={{ color: icon.color, border: `1px solid ${icon.color}55` }}>
+                          {icon.label}
+                        </span>
+                        <span className="max-w-[110px] truncate">{t.path.split("/").pop()}</span>
+                        {dirty && <span className="text-amber-500 dark:text-amber-400">●</span>}
+                        <button
+                          className="ml-1 rounded p-0.5 hover:bg-foreground/10"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            closeTab(t.path);
+                          }}
+                        >
+                          <X className="size-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="min-h-0 flex-1 overflow-hidden">
+                  {activePath && activeTab ? (
+                    <CodeEditor
+                      tab={activeTab}
+                      onChange={(content) =>
+                        setTabs((prev) =>
+                          prev.map((t) => (t.path === activePath ? { ...t, draft: content } : t)),
+                        )
+                      }
+                      onSave={saveActive}
+                      onRun={() => handleRunRef.current?.()}
+                      theme={theme}
+                      onThemeToggle={toggleAppTheme}
+                      fontSize={workspace?.fontSize ?? 13}
+                      wordWrap={workspace?.wordWrap ?? false}
+                      onFontSizeChange={(size) =>
+                        updateEditorSettings({ fontSize: Math.min(24, Math.max(10, size)) })
+                      }
+                      onWordWrapToggle={() =>
+                        updateEditorSettings({ wordWrap: !(workspace?.wordWrap ?? false) })
+                      }
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground/70">
+                      Select a file to start editing — tap the ☰ menu to browse files
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
 
-          <Panel>
-            <PanelGroup direction="vertical">
-              {/* Editor area */}
-              <Panel defaultSize={65} minSize={25}>
-                <div className="flex h-full min-h-0 flex-col">
-                  {/* Tabs */}
-                  <div className="flex h-9 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border/60 bg-[#0D1117] px-1">
+            {mobilePanel === "terminal" && (
+              <div className="min-h-0 flex-1">
+                <TerminalPanel
+                  lines={terminalLines}
+                  runState={runState}
+                  onClear={() => setTerminalLines([])}
+                  onStop={handleStop}
+                  onRerun={handleRerun}
+                  canRerun={lastRunTarget !== null}
+                  onClose={() => setMobilePanel("editor")}
+                />
+              </div>
+            )}
+
+            {mobilePanel === "preview" && (
+              <div className="min-h-0 flex-1">
+                <PreviewPanel
+                  html={previewHtml}
+                  onMessage={handlePreviewMessage}
+                  onClose={() => setMobilePanel("editor")}
+                />
+              </div>
+            )}
+          </div>
+        ) : (
+          /* ---------------- DESKTOP: resizable panels (unchanged) ---------------- */
+          <PanelGroup direction="horizontal">
+            {explorerOpen && (
+              <>
+                <Panel defaultSize={20} minSize={12} maxSize={40}>
+                  <FileExplorer
+                    files={allFiles}
+                    activeFile={activePath}
+                    openTabs={tabs.map((t) => t.path)}
+                    dirtyPaths={dirtyPaths}
+                    onOpenFile={openFile}
+                    onCreate={handleCreate}
+                    onRename={handleRename}
+                    onDelete={handleDelete}
+                    onDuplicate={handleDuplicate}
+                    onDownloadFile={handleDownloadFile}
+                  />
+                </Panel>
+                <PanelResizeHandle className="w-px bg-border/60 data-[resize-handle-active]:bg-sky-500" />
+              </>
+            )}
+
+            <Panel>
+              <PanelGroup direction="vertical">
+                {/* Editor area */}
+                <Panel defaultSize={65} minSize={25}>
+                  <div className="flex h-full min-h-0 flex-col">
+                    {/* Tabs */}
+                    <div className="flex h-9 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border/60 bg-[#0D1117] px-1">
                     {tabs.length === 0 && (
                       <span className="px-3 text-xs text-muted-foreground/70">No open files — pick one from the explorer</span>
                     )}
@@ -901,27 +1091,56 @@ export default function Ide() {
             </PanelGroup>
           </Panel>
         </PanelGroup>
+        )}
       </div>
 
       {/* Status bar */}
-      <footer className="flex h-6 shrink-0 items-center gap-3 border-t border-border/60 bg-background px-3 text-[11px] text-muted-foreground">
-        <button className="flex items-center gap-1 hover:text-foreground" onClick={() => setExplorerOpen((v) => !v)}>
-          {explorerOpen ? <PanelLeftClose className="size-3.5" /> : <PanelLeftOpen className="size-3.5" />} Explorer
-        </button>
-        <button className="flex items-center gap-1 hover:text-foreground" onClick={() => setTerminalOpen((v) => !v)}>
-          <TerminalIcon className="size-3.5" /> Terminal
-        </button>
-        {previewAvailable && (
-          <button className="flex items-center gap-1 hover:text-foreground" onClick={() => setPreviewOpen((v) => !v)}>
-            <LayoutPanelLeft className="size-3.5" /> Preview
+      <footer className="flex h-7 shrink-0 items-center gap-3 overflow-x-auto border-t border-border/60 bg-background px-3 text-[11px] text-muted-foreground">
+        {/* Mobile status-bar switches: explorer drawer + panel switcher */}
+        <div className="flex items-center gap-3 md:hidden">
+          <button className="flex items-center gap-1 hover:text-foreground" onClick={() => setExplorerDrawerOpen(true)}>
+            <PanelLeftOpen className="size-3.5" /> Files
           </button>
-        )}
+          <button
+            className={`flex items-center gap-1 hover:text-foreground ${mobilePanel === "terminal" ? "text-sky-500" : ""}`}
+            onClick={() => setMobilePanel("terminal")}
+          >
+            <TerminalIcon className="size-3.5" /> Terminal
+          </button>
+          {previewAvailable && (
+            <button
+              className={`flex items-center gap-1 hover:text-foreground ${mobilePanel === "preview" ? "text-sky-500" : ""}`}
+              onClick={() => setMobilePanel("preview")}
+            >
+              <LayoutPanelLeft className="size-3.5" /> Preview
+            </button>
+          )}
+          <button
+            className={`flex items-center gap-1 hover:text-foreground ${mobilePanel === "editor" ? "text-sky-500" : ""}`}
+            onClick={() => setMobilePanel("editor")}
+          >
+            Editor
+          </button>
+        </div>
+        <div className="hidden items-center gap-3 md:flex">
+          <button className="flex items-center gap-1 hover:text-foreground" onClick={() => setExplorerOpen((v) => !v)}>
+            {explorerOpen ? <PanelLeftClose className="size-3.5" /> : <PanelLeftOpen className="size-3.5" />} Explorer
+          </button>
+          <button className="flex items-center gap-1 hover:text-foreground" onClick={() => setTerminalOpen((v) => !v)}>
+            <TerminalIcon className="size-3.5" /> Terminal
+          </button>
+          {previewAvailable && (
+            <button className="flex items-center gap-1 hover:text-foreground" onClick={() => setPreviewOpen((v) => !v)}>
+              <LayoutPanelLeft className="size-3.5" /> Preview
+            </button>
+          )}
+        </div>
         {activePath && (
-          <span className="truncate">
+          <span className="hidden min-w-0 truncate sm:inline">
             {activePath} · {activeLang ? LANGUAGES[activeLang].label : "Text"}
           </span>
         )}
-        <span className="ml-auto flex items-center gap-3">
+        <span className="ml-auto hidden items-center gap-3 sm:flex">
           {pyodideState === "loading" && <span className="text-sky-500 dark:text-sky-400">Python runtime loading…</span>}
           {pyodideState === "ready" && <span className="text-emerald-600 dark:text-emerald-500">Python ready</span>}
           {pyodideState === "error" && <span className="text-amber-600 dark:text-amber-400">Python runtime unavailable</span>}
@@ -936,6 +1155,33 @@ export default function Ide() {
           )}
         </span>
       </footer>
+
+      {/* Mobile file-explorer drawer — all file actions stay accessible */}
+      <Sheet open={isNarrow && explorerDrawerOpen} onOpenChange={setExplorerDrawerOpen}>
+        <SheetContent side="left" className="flex w-[86vw] max-w-xs flex-col gap-0 p-0 sm:max-w-sm">
+          <SheetHeader className="border-b border-border/60 px-3 py-2">
+            <SheetTitle className="text-sm">Files</SheetTitle>
+          </SheetHeader>
+          <div className="min-h-0 flex-1">
+            <FileExplorer
+              files={allFiles}
+              activeFile={activePath}
+              openTabs={tabs.map((t) => t.path)}
+              dirtyPaths={dirtyPaths}
+              onOpenFile={(path) => {
+                openFile(path);
+                setExplorerDrawerOpen(false);
+                setMobilePanel("editor");
+              }}
+              onCreate={handleCreate}
+              onRename={handleRename}
+              onDelete={handleDelete}
+              onDuplicate={handleDuplicate}
+              onDownloadFile={handleDownloadFile}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* New file/folder dialog */}
       <Dialog open={newFileDialog !== null} onOpenChange={(open) => !open && setNewFileDialog(null)}>

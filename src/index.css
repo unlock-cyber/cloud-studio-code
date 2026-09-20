@@ -119,9 +119,23 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Never let long words/URLs force page-level horizontal overflow. */
+    overflow-x: hidden;
+    overflow-wrap: break-word;
   }
   button:not([disabled]),
   [role="button"]:not([disabled]) {
     cursor: pointer;
+  }
+  /* Comfortable touch targets on small screens (44px min). */
+  @media (max-width: 640px) {
+    button,
+    a,
+    input,
+    select,
+    textarea,
+    [role="button"] {
+      touch-action: manipulation;
+    }
   }
 }

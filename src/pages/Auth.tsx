@@ -417,6 +417,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                       onChange={setOtp}
                       maxLength={6}
                       disabled={isLoading}
+                      className="scale-90 sm:scale-100"
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && otp.length === 6 && !isLoading) {
                           const form = (e.target as HTMLElement).closest("form");

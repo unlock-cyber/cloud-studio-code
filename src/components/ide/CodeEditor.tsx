@@ -205,14 +205,14 @@ export function CodeEditor({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-2 border-b border-border/60 bg-background px-2 py-1">
-        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-          <span className="font-medium text-foreground/90">{tab.path.split("/").pop()}</span>
+      <div className="flex items-center gap-2 overflow-x-auto border-b border-border/60 bg-background px-2 py-1">
+        <div className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+          <span className="max-w-[120px] truncate font-medium text-foreground/90 sm:max-w-none">{tab.path.split("/").pop()}</span>
           {dirty && <span className="text-amber-500 dark:text-amber-400">●</span>}
           <span className="mx-1 text-border">|</span>
-          <span>{lang.toUpperCase()}</span>
+          <span className="hidden sm:inline">{lang.toUpperCase()}</span>
         </div>
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           <Button
             variant="ghost"
             size="sm"

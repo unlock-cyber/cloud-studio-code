@@ -288,10 +288,10 @@ function ReportManager({
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search reports…"
-          className="h-9 max-w-56"
+          className="h-9 w-full sm:max-w-56 sm:w-auto"
         />
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-9 w-36">
+          <SelectTrigger className="h-9 w-full sm:w-36">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -304,7 +304,7 @@ function ReportManager({
           </SelectContent>
         </Select>
         <Select value={sort} onValueChange={(v) => setSort(v as "newest" | "oldest")}>
-          <SelectTrigger className="h-9 w-32">
+          <SelectTrigger className="h-9 w-full sm:w-32">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

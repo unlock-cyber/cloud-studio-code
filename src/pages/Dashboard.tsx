@@ -307,16 +307,16 @@ export default function Dashboard() {
     <div className="min-h-screen bg-background text-foreground">
       {/* Header */}
       <header className="border-b border-border/60">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
-          <div className="flex items-center gap-2">
-            <TerminalSquare className="size-5 text-primary" />
-            <span className="inline-flex items-start gap-1">
-              <span className="font-semibold">Cloud Studio Code</span>
-              <BetaBadge className="-translate-y-1" />
+        <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-3 sm:gap-3 sm:px-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <TerminalSquare className="size-5 shrink-0 text-primary" />
+            <span className="inline-flex min-w-0 items-start gap-1">
+              <span className="truncate font-semibold">Cloud Studio Code</span>
+              <BetaBadge className="-translate-y-1 shrink-0" />
             </span>
           </div>
-          <div className="ml-auto flex items-center gap-2">
-            <Badge variant={isGuest ? "secondary" : "default"} className="text-[11px]">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <Badge variant={isGuest ? "secondary" : "default"} className="hidden text-[11px] sm:inline-flex">
               {isGuest ? "Guest workspace" : "Registered workspace"}
             </Badge>
             {user?.email && <span className="hidden text-xs text-muted-foreground sm:inline">{user.email}</span>}
@@ -335,7 +335,7 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-8">
+      <main className="mx-auto max-w-6xl px-3 py-8 sm:px-4">
         {/* Workspace status */}
         <div className="mb-8 flex flex-col gap-4 rounded-xl border border-border/60 bg-card p-5 sm:flex-row sm:items-center">
           <div className="flex-1">
