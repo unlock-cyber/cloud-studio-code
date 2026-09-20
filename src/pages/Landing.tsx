@@ -343,6 +343,13 @@ export default function Landing() {
             >
               Bugs &amp; Contributions
             </button>
+            <button
+              type="button"
+              className="transition-colors hover:text-foreground"
+              onClick={() => navigate("/privacy")}
+            >
+              Privacy Policy
+            </button>
           </nav>
           <div className="flex flex-col gap-1 border-t border-border/40 pt-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <span>© 2026 Cloud Studio Code. All rights reserved.</span>
