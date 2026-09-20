@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { BetaBadge } from "@/components/BetaBadge";
 
 const emptyForm = {
   title: "",
@@ -77,9 +76,8 @@ export default function Contributions() {
 
       <main className="mx-auto max-w-3xl px-4 pb-16">
         <div className="pt-10 pb-8">
-          <h1 className="inline-flex items-start gap-1 text-3xl font-bold tracking-tight sm:text-4xl">
+          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
             <span>Bugs &amp; Contributions</span>
-            <BetaBadge className="-translate-y-1" />
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
             Cloud Studio Code is still under active development, and things may change

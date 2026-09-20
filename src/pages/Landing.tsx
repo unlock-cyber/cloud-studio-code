@@ -312,37 +312,42 @@ export default function Landing() {
         </div>
       </section>
 
-      <footer className="border-t border-border/60 py-8">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 text-xs text-muted-foreground">
-          <span className="inline-flex items-start gap-1">
+      <footer className="border-t border-border/60 py-10">
+        <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4">
+          <div className="inline-flex items-start gap-1 text-sm font-semibold text-foreground">
             Cloud Studio Code
             <BetaBadge className="-translate-y-0.5" />
-            <span aria-hidden="true">·</span>
+          </div>
+          <nav
+            aria-label="Footer"
+            className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground"
+          >
             <button
               type="button"
-              className="underline-offset-2 transition-colors hover:text-foreground hover:underline"
+              className="transition-colors hover:text-foreground"
               onClick={() => navigate("/about")}
             >
               About
             </button>
-            <span aria-hidden="true">·</span>
             <button
               type="button"
-              className="underline-offset-2 transition-colors hover:text-foreground hover:underline"
+              className="transition-colors hover:text-foreground"
               onClick={() => navigate("/changelog")}
             >
               Changelog
             </button>
-            <span aria-hidden="true">·</span>
             <button
               type="button"
-              className="underline-offset-2 transition-colors hover:text-foreground hover:underline"
+              className="transition-colors hover:text-foreground"
               onClick={() => navigate("/contributions")}
             >
               Bugs &amp; Contributions
             </button>
-          </span>
-          <span>Python · C++ · Java · TypeScript · SQL · Web</span>
+          </nav>
+          <div className="flex flex-col gap-1 border-t border-border/40 pt-4 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>© 2026 Cloud Studio Code. All rights reserved.</span>
+            <span>Python · C++ · Java · TypeScript · SQL · Web</span>
+          </div>
         </div>
       </footer>
     </div>
