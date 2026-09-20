@@ -2,9 +2,15 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { usePageMeta } from "@/lib/seo";
 
 export default function NotFound() {
   const navigate = useNavigate();
+  usePageMeta({
+    title: "Page not found — Cloud Studio Code",
+    description: "This page could not be found.",
+    noindex: true,
+  });
   return (
     <motion.div
       initial={{ opacity: 0 }}

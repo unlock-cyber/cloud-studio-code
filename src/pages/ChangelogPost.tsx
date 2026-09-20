@@ -1,9 +1,16 @@
 import { useNavigate } from "react-router";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { usePageMeta } from "@/lib/seo";
 
 export default function ChangelogPost() {
   const navigate = useNavigate();
+  usePageMeta({
+    title: "Introducing Cloud Studio Code — Changelog",
+    description:
+      "Launching Cloud Studio Code: a browser-based cloud IDE with a real editor, sandboxed code execution, live web previews and persistent cloud workspaces.",
+    path: "/changelog/introducing-cloud-studio-code",
+  });
 
   return (
     <div className="min-h-screen bg-background text-foreground">

@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { usePageMeta } from "@/lib/seo";
 
 function Section({
   id,
@@ -42,6 +43,12 @@ const InlineLink = ({ to, children }: { to: string; children: React.ReactNode })
 
 export default function Terms() {
   const navigate = useNavigate();
+  usePageMeta({
+    title: "Terms of Service — Cloud Studio Code",
+    description:
+      "The terms that govern use of Cloud Studio Code, including the BETA status of the platform, workspace retention rules, acceptable use and limitations.",
+    path: "/terms",
+  });
 
   return (
     <div className="min-h-screen bg-background text-foreground">

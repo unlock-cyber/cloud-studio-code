@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { usePageMeta } from "@/lib/seo";
 
 function Section({
   id,
@@ -51,6 +52,12 @@ const ExternalLink = ({ to, children }: { to: string; children: React.ReactNode 
 
 export default function Privacy() {
   const navigate = useNavigate();
+  usePageMeta({
+    title: "Privacy Policy — Cloud Studio Code",
+    description:
+      "What information Cloud Studio Code collects, how workspace and account data is used, retained and protected, and the options you have over your data.",
+    path: "/privacy",
+  });
 
   return (
     <div className="min-h-screen bg-background text-foreground">

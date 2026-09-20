@@ -25,6 +25,7 @@ import { api } from "@/convex/_generated/api";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth } from "convex/react";
 import { toast } from "sonner";
+import { usePageMeta, webSiteSchema } from "@/lib/seo";
 
 const FEATURES = [
   {
@@ -77,6 +78,13 @@ const LANGS: Array<{ name: string; mode: string; badge: string; color: string }>
 
 export default function Landing() {
   const navigate = useNavigate();
+  usePageMeta({
+    title: "Cloud Studio Code — Browser-Based Cloud IDE",
+    description:
+      "Cloud Studio Code is a browser-based cloud IDE: write and edit code in an online code editor, run Python, C++, Java, TypeScript and more in sandboxed runtimes, preview web projects live, and keep projects and files in your cloud workspace.",
+    path: "/",
+    structuredData: webSiteSchema() ?? undefined,
+  });
   const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const user = useQuery(api.users.currentUser);
   const { signIn } = useAuthActions();

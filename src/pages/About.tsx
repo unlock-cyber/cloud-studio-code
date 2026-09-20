@@ -2,9 +2,16 @@ import { useNavigate } from "react-router";
 import { ArrowLeft, Cloud, Lightbulb, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BetaBadge } from "@/components/BetaBadge";
+import { usePageMeta } from "@/lib/seo";
 
 export default function About() {
   const navigate = useNavigate();
+  usePageMeta({
+    title: "About — Cloud Studio Code",
+    description:
+      "What Cloud Studio Code is, why it exists, and the idea behind a browser-based development environment that anyone can open and start using.",
+    path: "/about",
+  });
 
   return (
     <div className="min-h-screen bg-background text-foreground">

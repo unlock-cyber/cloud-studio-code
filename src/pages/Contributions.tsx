@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { usePageMeta } from "@/lib/seo";
 
 const emptyForm = {
   title: "",
@@ -21,6 +22,12 @@ const emptyForm = {
 };
 
 export default function Contributions() {
+  usePageMeta({
+    title: "Bugs & Contributions — Cloud Studio Code",
+    description:
+      "Found a bug in Cloud Studio Code, or have an idea that would make the browser-based IDE better? Report it here — reports are reviewed directly by the team.",
+    path: "/contributions",
+  });
   const navigate = useNavigate();
   const submit = useMutation(api.bugReports.submitReport);
   const [form, setForm] = useState(emptyForm);
