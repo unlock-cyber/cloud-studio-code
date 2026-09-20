@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { BetaBadge } from "@/components/BetaBadge";
-import { useNavigate } from "react-router";
+import { useNavigate, Link } from "react-router";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -209,6 +209,17 @@ export default function Landing() {
                     Start coding free <ArrowRight className="size-4" />
                   </Button>
                   {guestButton}
+                  <p className="mt-3 w-full text-xs text-muted-foreground/80">
+                    By continuing, you agree to our{" "}
+                    <Link to="/privacy" className="underline-offset-2 transition-colors hover:text-foreground hover:underline">
+                      Privacy Policy
+                    </Link>{" "}
+                    and{" "}
+                    <Link to="/terms" className="underline-offset-2 transition-colors hover:text-foreground hover:underline">
+                      Terms of Service
+                    </Link>
+                    .
+                  </p>
                 </>
               )}
             </div>
