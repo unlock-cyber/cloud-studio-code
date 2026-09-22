@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en" class="dark">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0D1117" />
+  <title>Cloud Studio Code — Browser-Based Cloud IDE</title>
+  <meta
+    name="description"
+    content="Cloud Studio Code is a browser-based cloud IDE: write and edit code in an online code editor, run Python, C++, Java, TypeScript and more in sandboxed runtimes, preview web projects live, and keep projects and files in your cloud workspace."
+  />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Cloud Studio Code" />
+  <meta property="og:title" content="Cloud Studio Code — Browser-Based Cloud IDE" />
+  <meta
+    property="og:description"
+    content="A browser-based development environment for writing, running and previewing code — with projects, files and a sandboxed runtime in the cloud."
+  />
+
+  <!-- Twitter/X -->
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="Cloud Studio Code — Browser-Based Cloud IDE" />
+  <meta
+    name="twitter:description"
+    content="A browser-based development environment for writing, running and previewing code — with projects, files and a sandboxed runtime in the cloud."
+  />
+
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Cloud Studio Code",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Web",
+      "description": "A browser-based cloud IDE for writing, running and previewing code — with projects, files and a sandboxed runtime in the cloud.",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+    }
+  </script>
+
+  <script>
+    // Apply the saved theme before first paint (dark is the default).
+    (function () {
+      try {
+        var t = localStorage.getItem("ccloud-theme");
+        if (t === "light") {
+          document.documentElement.classList.remove("dark");
+          document.documentElement.style.colorScheme = "light";
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <script type="module" crossorigin src="/assets/index-BK-Z6Y1V.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/react-vendor-DVxV5ELH.js">
+  <link rel="modulepreload" crossorigin href="/assets/framer-motion-BXbfwMjo.js">
+  <link rel="modulepreload" crossorigin href="/assets/radix-ui-Dp4gMc_0.js">
+  <link rel="stylesheet" crossorigin href="/assets/index-B92BElgy.css">
+</head>
+
+
+<body>
+  <div id="root"></div>
+</body>
+
+</html>
