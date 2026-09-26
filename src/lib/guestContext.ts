@@ -62,6 +62,12 @@ export function clearGuestContext() {
  * correct padding, so calling it on the raw payload segment throws for most
  * tokens (any `-`/`_` character, or a length not divisible by 4). Normalizing
  * to padded standard base64 first makes the decode reliable for every token.
+ *
+ * The session id is NOT a top-level claim: Convex Auth packs it into the
+ * subject as `sub = "<userId>|<sessionId>"` (see the server's
+ * `getSessionId`, which splits the subject on `|`). Reading a `sessionId`
+ * claim returned an empty string for every real token, which silently
+ * disabled guest migration on the dashboard (the context was never stored).
  */
 export function sessionIdFromAuthToken(token: string | null | undefined): string {
   if (!token) return "";
@@ -73,8 +79,18 @@ export function sessionIdFromAuthToken(token: string | null | undefined): string
     const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
     const payload = JSON.parse(new TextDecoder().decode(bytes)) as {
       sessionId?: unknown;
+      sub?: unknown;
     };
-    return typeof payload.sessionId === "string" ? payload.sessionId : "";
+    // Tolerate an explicit claim (other token shapes), then fall back to the
+    // subject, which is how this deployment's tokens actually carry it.
+    if (typeof payload.sessionId === "string" && payload.sessionId) {
+      return payload.sessionId;
+    }
+    if (typeof payload.sub === "string") {
+      const divider = payload.sub.indexOf("|");
+      if (divider !== -1) return payload.sub.slice(divider + 1);
+    }
+    return "";
   } catch {
     return "";
   }

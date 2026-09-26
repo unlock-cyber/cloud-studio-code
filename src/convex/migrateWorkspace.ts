@@ -15,10 +15,12 @@
 //    throws instead of moving someone else's data.
 //  - Everything (ownership move + guest cleanup) commits atomically. If any
 //    step fails, nothing is written and the guest data stays intact.
-//  - Guest data is never silently discarded: if the target workspace already
-//    exists (provisioned empty by the dashboard after auth), the guest's
-//    projects/files are MOVED into it (only when the target is empty), so
-//    nothing is left behind.
+//  - Guest data is never silently discarded or duplicated: if a workspace
+//    already exists for the account (an empty one provisioned by the
+//    dashboard, or a returning user's own), the guest's projects/files are
+//    MOVED into it. Projects are independent documents, so a move cannot
+//    overwrite anything the account already owns; storage usage is summed
+//    and the emptied guest workspace is removed.
 //  - Successful authentication alone is never treated as a successful
 //    migration — the migration result is explicit ({ migrated: true/false }).
 //  - Expired workspace shells are revived before the move: an expired shell
@@ -144,32 +146,35 @@ export const migrateFromGuest = mutation({
 
     let targetId: Id<"workspaces">;
     if (existingTarget) {
-      // A workspace was already provisioned for the registered account
-      // (e.g. by the dashboard's provisioning gate after auth). We may still
-      // complete the MOVE — but ONLY when the target has no projects, so
-      // nothing can be duplicated, merged or overwritten.
+      // This account already has a workspace: either one the dashboard
+      // provisioned empty right after auth, or a returning user's workspace
+      // with their own projects. Projects are independent documents keyed by
+      // workspace, so moving the guest's projects in adds them without
+      // overwriting, merging or duplicating anything the account owns.
       const existingProjects = await ctx.db
         .query("projects")
         .withIndex("by_workspace", (q) => q.eq("workspaceId", existingTarget._id))
         .collect();
-      if (existingProjects.length > 0) {
-        // Refuse: the target already has content and a move would conflict.
-        return { migrated: false, reason: "target-already-exists" };
-      }
       targetId = existingTarget._id;
-      // Adopt the guest workspace's settings and usage into the target, and
-      // make sure the target itself is active — an expired shell would be
-      // wiped by the dashboard's expiry gate right after the reload.
+      // Make sure the target itself is active — an expired shell would
+      // otherwise be wiped by the dashboard's expiry gate right after the
+      // reload, destroying the freshly moved data. Usage is the sum of both
+      // workspaces because the guest workspace is emptied by this move.
       const now = Date.now();
-      await ctx.db.patch(existingTarget._id, {
+      const patch: Record<string, unknown> = {
         status: "active",
-        usedBytes: ws.usedBytes,
+        usedBytes: existingTarget.usedBytes + ws.usedBytes,
         lastActivityAt: now,
         expiresAt: now + REGISTERED_INACTIVITY_MS,
-        editorTheme: ws.editorTheme ?? existingTarget.editorTheme,
-        fontSize: ws.fontSize ?? existingTarget.fontSize,
-        wordWrap: ws.wordWrap ?? existingTarget.wordWrap,
-      });
+      };
+      if (existingProjects.length === 0) {
+        // Freshly provisioned target: adopt the guest's editor preferences.
+        // An account that already has content keeps its own settings.
+        patch.editorTheme = ws.editorTheme ?? existingTarget.editorTheme;
+        patch.fontSize = ws.fontSize ?? existingTarget.fontSize;
+        patch.wordWrap = ws.wordWrap ?? existingTarget.wordWrap;
+      }
+      await ctx.db.patch(existingTarget._id, patch);
     } else {
       // 5. MOVE the workspace itself to the new user, upgrading it to the
       //    registered tier. Projects, files and SQL databases all hang off

@@ -95,6 +95,8 @@ import { fileIconMeta } from "@/lib/fileTree";
 import { startPyodideWarmup, subscribePyodideWarmup } from "@/lib/pyodideRunner";
 import { warmEsbuild } from "@/lib/tsRunner";
 import { formatBytesClient } from "@/lib/clientHelpers";
+import { sessionIdFromAuthToken, storeGuestContext } from "@/lib/guestContext";
+import { useAuthToken } from "@convex-dev/auth/react";
 
 const RUNNABLE_LANGS: LangId[] = ["python", "javascript", "typescript", "c", "cpp", "java", "bash", "sql"];
 
@@ -181,13 +183,25 @@ export default function Ide() {
   }, []);
 
   // ---- Workspace activity heartbeat ----
+  // The same heartbeat refreshes the guest upgrade context: the OTP handler on
+  // /auth reads it to move this workspace after sign-in, and its 1-hour TTL is
+  // measured from the capture time — a guest can easily work in the IDE longer
+  // than that, and a stale entry would silently skip the migration.
+  const providerToken = useAuthToken();
   useEffect(() => {
     if (!isAuthenticated) return;
+    const refreshGuestContext = () => {
+      if (workspace?.kind !== "guest" || !providerToken) return;
+      const sessionId = sessionIdFromAuthToken(providerToken);
+      if (sessionId) storeGuestContext({ workspaceId: workspace._id, sessionId });
+    };
+    refreshGuestContext();
     const interval = window.setInterval(() => {
       touchWs().catch(() => undefined);
+      refreshGuestContext();
     }, 60_000);
     return () => window.clearInterval(interval);
-  }, [isAuthenticated, touchWs]);
+  }, [isAuthenticated, touchWs, workspace, providerToken]);
 
   // ---- Load saved session (tabs + active file) ----
   const sessionLoaded = useRef<string | null>(null);
@@ -482,6 +496,10 @@ export default function Ide() {
       const built = buildPreviewHtml(contents, project?.entryFile ?? null);
       setPreviewHtml(built.html);
       setPreviewOpen(true);
+      // Mobile shows one full-screen panel at a time (editor by default), so
+      // the desktop-only `previewOpen` flag would leave the run invisibly
+      // behind the editor. Bring the same preview panel forward there too.
+      if (isNarrow) setMobilePanel("preview");
       setRunState("success");
       setTerminalLines((prev) => [
         ...prev.slice(-400),
@@ -524,7 +542,7 @@ export default function Ide() {
       { projectId, path: activePath, content: activeTab.draft, lang },
       runCallbacks,
     );
-  }, [activePath, activeTab, tabs, project?.entryFile, hasWebPreview, projectId, saveFile, runCallbacks, showToast]);
+  }, [activePath, activeTab, tabs, project?.entryFile, hasWebPreview, projectId, saveFile, runCallbacks, showToast, isNarrow]);
 
   const handleRunRef = useRef(handleRun);
   handleRunRef.current = handleRun;
