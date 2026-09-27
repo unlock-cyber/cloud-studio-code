@@ -32,6 +32,7 @@ import {
   Menu,
   Globe,
   MoreHorizontal,
+  AlertTriangle,
 } from "lucide-react";
 import {
   Sheet,
@@ -159,9 +160,16 @@ export default function Ide() {
   const [commandOpen, setCommandOpen] = useState(false);
   const [newFileDialog, setNewFileDialog] = useState<{ isFolder: boolean } | null>(null);
   const [newFileName, setNewFileName] = useState("");
+  const [newFileError, setNewFileError] = useState<string | null>(null);
   const [pyodideState, setPyodideState] = useState<string>("idle");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  // Action waiting on the unsaved-changes confirmation (closing a dirty tab,
+  // or leaving the project while edits are pending).
+  const [unsavedPrompt, setUnsavedPrompt] = useState<
+    { kind: "close-tab"; path: string } | { kind: "leave" } | null
+  >(null);
+  const [unsavedBusy, setUnsavedBusy] = useState(false);
   const lineIdRef = useRef(0);
 
   const showToast = useCallback((msg: string) => {
@@ -214,6 +222,11 @@ export default function Ide() {
     if (!project || !filesRes) return;
     if (sessionLoaded.current === project._id) return;
     sessionLoaded.current = project._id;
+
+    // Opening a project is activity: this refreshes `lastOpenedAt`, which is
+    // what the dashboard's Recent projects list is ordered by. No tab names
+    // are passed, so the saved session is left exactly as it was.
+    void setSession({ projectId }).catch(() => undefined);
 
     const savedTabs = (project.openTabs ?? []).filter((p) =>
       filesRes.some((f) => f.path === p && !f.isFolder),
@@ -305,21 +318,29 @@ export default function Ide() {
     [filesRes, tabs, persistSession, showToast],
   );
 
-  const closeTab = useCallback(
+  const closeTabNow = useCallback(
     (path: string) => {
-      setTabs((prev) => {
-        const next = prev.filter((t) => t.path !== path);
-        if (activePath === path) {
-          const fallback = next[next.length - 1]?.path ?? null;
-          setActivePath(fallback);
-          persistSession(next.map((t) => t.path), fallback);
-        } else {
-          persistSession(next.map((t) => t.path), activePath);
-        }
-        return next;
-      });
+      const next = tabs.filter((t) => t.path !== path);
+      const nextActive =
+        activePath === path ? next[next.length - 1]?.path ?? null : activePath;
+      setTabs(next);
+      setActivePath(nextActive);
+      persistSession(next.map((t) => t.path), nextActive);
     },
-    [activePath, persistSession],
+    [tabs, activePath, persistSession],
+  );
+
+  // Closing a tab that has unsaved edits asks first — never discards silently.
+  const requestCloseTab = useCallback(
+    (path: string) => {
+      const tab = tabs.find((t) => t.path === path);
+      if (tab && tab.draft !== tab.content) {
+        setUnsavedPrompt({ kind: "close-tab", path });
+        return;
+      }
+      closeTabNow(path);
+    },
+    [tabs, closeTabNow],
   );
 
   // ---- Saving ----
@@ -376,6 +397,56 @@ export default function Ide() {
     () => new Set(tabs.filter((t) => t.draft !== t.content).map((t) => t.path)),
     [tabs],
   );
+
+  // ---- Unsaved-changes protection ----
+  // Saving is always explicit (Ctrl+S / the Save button): this only makes
+  // sure an action that would throw drafts away asks first, and asks only
+  // when there is actually something unsaved.
+  const saveAllDirty = useCallback(async () => {
+    for (const t of tabs.filter((x) => x.draft !== x.content)) {
+      await saveFile({ projectId, path: t.path, content: t.draft });
+    }
+    setTabs((prev) => prev.map((t) => ({ ...t, content: t.draft })));
+  }, [tabs, projectId, saveFile]);
+
+  const leaveProject = useCallback(() => {
+    if (dirtyPaths.size > 0) {
+      setUnsavedPrompt({ kind: "leave" });
+      return;
+    }
+    navigate("/dashboard");
+  }, [dirtyPaths.size, navigate]);
+
+  const resolveUnsaved = useCallback(
+    async (action: "save" | "discard") => {
+      if (!unsavedPrompt) return;
+      setUnsavedBusy(true);
+      try {
+        if (action === "save") await saveAllDirty();
+        if (unsavedPrompt.kind === "close-tab") closeTabNow(unsavedPrompt.path);
+        else navigate("/dashboard");
+        setUnsavedPrompt(null);
+      } catch (e) {
+        // Keep the prompt open: nothing is discarded until saving works.
+        showToast(e instanceof Error ? e.message : "Could not save your changes");
+      } finally {
+        setUnsavedBusy(false);
+      }
+    },
+    [unsavedPrompt, saveAllDirty, closeTabNow, navigate, showToast],
+  );
+
+  // Browser-level safety net for reload/close/tab-switch. In-app navigation
+  // goes through leaveProject above.
+  useEffect(() => {
+    if (dirtyPaths.size === 0) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirtyPaths.size]);
 
   // ---- Preview (uses server contents so ALL project files are included) ----
   useEffect(() => {
@@ -578,70 +649,84 @@ export default function Ide() {
   );
 
   const confirmCreate = useCallback(async () => {
-    if (!newFileDialog || !newFileName.trim()) return;
+    if (!newFileDialog) return;
+    const path = newFileName.trim();
+    if (!path) {
+      setNewFileError("Enter a file or folder name.");
+      return;
+    }
     try {
       await createFile({
         projectId,
-        path: newFileName.trim(),
+        path,
         isFolder: newFileDialog.isFolder,
         content: "",
       });
       if (!newFileDialog.isFolder) {
-        openFile(newFileName.trim());
+        openFile(path);
       }
       setNewFileDialog(null);
       setNewFileName("");
+      setNewFileError(null);
     } catch (e) {
-      showToast(e instanceof Error ? e.message : "Failed to create");
+      // Keep the dialog (and the typed path) so the name can be corrected.
+      setNewFileError(e instanceof Error ? e.message : "Could not create that file. Please try again.");
     }
-  }, [newFileDialog, newFileName, createFile, projectId, openFile, showToast]);
+  }, [newFileDialog, newFileName, createFile, projectId, openFile]);
 
+  /** Re-paths open tabs (and the active tab) after a rename/move, keeping
+   *  unsaved drafts attached to the file they belong to. */
+  const remapPath = useCallback(
+    (path: string, newPath: string) => {
+      const next = tabs.map((t) => {
+        if (t.path === path) return { ...t, path: newPath };
+        if (t.path.startsWith(path + "/")) return { ...t, path: newPath + t.path.slice(path.length) };
+        return t;
+      });
+      let nextActive = activePath;
+      if (activePath === path) nextActive = newPath;
+      else if (activePath && activePath.startsWith(path + "/")) {
+        nextActive = newPath + activePath.slice(path.length);
+      }
+      setTabs(next);
+      setActivePath(nextActive);
+      persistSession(next.map((t) => t.path), nextActive);
+    },
+    [tabs, activePath, persistSession],
+  );
+
+  // Rename/move and delete deliberately reject on failure: the explorer's
+  // dialogs catch the error, keep the user's input and show the message
+  // (conflicts like `"src/a.ts" already exists` included).
   const handleRename = useCallback(
     async (path: string, newPath: string) => {
-      if (newPath === path) return;
-      try {
-        await renameFile({ projectId, path, newPath });
-        // Update tabs: rename exact match, and remap folder descendants.
-        setTabs((prev) =>
-          prev.map((t) => {
-            if (t.path === path) return { ...t, path: newPath };
-            if (t.path.startsWith(path + "/")) {
-              return { ...t, path: newPath + t.path.slice(path.length) };
-            }
-            return t;
-          }),
-        );
-        if (activePath === path) setActivePath(newPath);
-        else if (activePath && activePath.startsWith(path + "/")) {
-          setActivePath(newPath + activePath.slice(path.length));
-        }
-      } catch (e) {
-        showToast(e instanceof Error ? e.message : "Failed to rename");
-      }
+      if (newPath === path || !newPath.trim()) return;
+      await renameFile({ projectId, path, newPath });
+      remapPath(path, newPath);
     },
-    [projectId, renameFile, activePath, showToast],
+    [projectId, renameFile, remapPath],
   );
 
   const handleDelete = useCallback(
     async (path: string) => {
-      try {
-        await deleteFile({ projectId, path });
-        setTabs((prev) => prev.filter((t) => t.path !== path && !t.path.startsWith(path + "/")));
-        if (activePath && (activePath === path || activePath.startsWith(path + "/"))) {
-          setActivePath(null);
-        }
-      } catch (e) {
-        showToast(e instanceof Error ? e.message : "Failed to delete");
-      }
+      await deleteFile({ projectId, path });
+      const next = tabs.filter((t) => t.path !== path && !t.path.startsWith(path + "/"));
+      const nextActive =
+        activePath && (activePath === path || activePath.startsWith(path + "/"))
+          ? next[next.length - 1]?.path ?? null
+          : activePath;
+      setTabs(next);
+      setActivePath(nextActive);
+      persistSession(next.map((t) => t.path), nextActive);
     },
-    [projectId, deleteFile, activePath, showToast],
+    [projectId, deleteFile, tabs, activePath, persistSession],
   );
 
   const handleDuplicate = useCallback(
     async (path: string) => {
       try {
-        await duplicateFile({ projectId, path });
-        showToast("File duplicated");
+        const result = (await duplicateFile({ projectId, path })) as { path: string } | undefined;
+        showToast(result?.path ? `Duplicated as ${result.path}` : "Duplicated");
       } catch (e) {
         showToast(e instanceof Error ? e.message : "Failed to duplicate");
       }
@@ -733,10 +818,10 @@ export default function Ide() {
         run: toggleAppTheme,
       },
       { id: "export", label: "Export project as ZIP", group: "Project", run: () => handleExport() },
-      { id: "back", label: "Back to dashboard", group: "Project", run: () => navigate("/dashboard") },
+      { id: "back", label: "Back to dashboard", group: "Project", run: leaveProject },
     );
     return items;
-  }, [textFiles, openFile, saveActive, activePath, handleExport, navigate, theme, toggleAppTheme]);
+  }, [textFiles, openFile, saveActive, activePath, handleExport, leaveProject, theme, toggleAppTheme]);
 
   // ---- Workspace expiry watch ----
   const workspaceExpired = workspace?.expiredNow ?? false;
@@ -756,21 +841,39 @@ export default function Ide() {
   // ---- Loading / error states ----
   if (project === undefined || filesRes === undefined) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background px-6 text-center">
         <div className="flex items-center gap-3 text-muted-foreground">
           <Loader2 className="size-5 animate-spin" />
-          <span className="text-sm">Loading workspace…</span>
+          <span className="text-sm">Loading your workspace…</span>
         </div>
+        <p className="text-xs text-muted-foreground/70">
+          Restoring your files, open tabs and editor settings.
+        </p>
       </div>
     );
   }
 
   if (project === null) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background text-center">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-6 text-center">
         <p className="text-lg text-foreground/80">Project not found</p>
-        <p className="text-sm text-muted-foreground">It may have been deleted, or belongs to another account.</p>
-        <Button onClick={() => navigate("/dashboard")}>Back to dashboard</Button>
+        <p className="max-w-sm text-sm text-muted-foreground">
+          It may have been deleted, or it belongs to another account. Your other projects are
+          waiting on the dashboard.
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button onClick={() => navigate("/dashboard")}>Back to dashboard</Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              // Re-run the project/file queries once — a stale id or a hiccup
+              // in the initial load can resolve on a second attempt.
+              window.location.reload();
+            }}
+          >
+            Try again
+          </Button>
+        </div>
       </div>
     );
   }
@@ -779,7 +882,7 @@ export default function Ide() {
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
       {/* Title bar */}
       <header className="flex h-11 shrink-0 items-center gap-1.5 border-b border-border/60 bg-background px-2 sm:px-3">
-        <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-muted-foreground" onClick={() => navigate("/dashboard")}>
+        <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-muted-foreground" onClick={leaveProject}>
           <ArrowLeft className="size-4" />
           <span className="hidden sm:inline">Projects</span>
         </Button>
@@ -916,7 +1019,7 @@ export default function Ide() {
                           className="ml-1 rounded p-0.5 hover:bg-foreground/10"
                           onClick={(e) => {
                             e.stopPropagation();
-                            closeTab(t.path);
+                            requestCloseTab(t.path);
                           }}
                         >
                           <X className="size-3" />
@@ -947,6 +1050,8 @@ export default function Ide() {
                         updateEditorSettings({ wordWrap: !(workspace?.wordWrap ?? false) })
                       }
                     />
+                  ) : allFiles.length === 0 ? (
+                    <EmptyProjectState onCreateFile={() => setNewFileDialog({ isFolder: false })} />
                   ) : (
                     <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground/70">
                       Select a file to start editing — tap the ☰ menu to browse files
@@ -1035,7 +1140,7 @@ export default function Ide() {
                             className="ml-1 rounded p-0.5 opacity-0 hover:bg-foreground/10 group-hover:opacity-100"
                             onClick={(e) => {
                               e.stopPropagation();
-                              closeTab(t.path);
+                              requestCloseTab(t.path);
                             }}
                           >
                             <X className="size-3" />
@@ -1070,6 +1175,8 @@ export default function Ide() {
                               updateEditorSettings({ wordWrap: !(workspace?.wordWrap ?? false) })
                             }
                           />
+                        ) : allFiles.length === 0 ? (
+                          <EmptyProjectState onCreateFile={() => setNewFileDialog({ isFolder: false })} />
                         ) : (
                           <div className="flex h-full items-center justify-center text-sm text-muted-foreground/70">
                             Select a file to start editing
@@ -1218,12 +1325,29 @@ export default function Ide() {
           <Input
             autoFocus
             value={newFileName}
-            onChange={(e) => setNewFileName(e.target.value)}
+            onChange={(e) => {
+              setNewFileError(null);
+              setNewFileName(e.target.value);
+            }}
             placeholder={newFileDialog?.isFolder ? "components" : "src/main.py"}
             onKeyDown={(e) => e.key === "Enter" && confirmCreate()}
           />
+          {newFileError && (
+            <p className="text-xs text-destructive" role="alert">
+              {newFileError}
+            </p>
+          )}
           <DialogFooter>
-            <Button variant="ghost" size="sm" onClick={() => setNewFileDialog(null)}>Cancel</Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setNewFileDialog(null);
+                setNewFileError(null);
+              }}
+            >
+              Cancel
+            </Button>
             <Button size="sm" onClick={confirmCreate}>Create</Button>
           </DialogFooter>
         </DialogContent>
@@ -1315,12 +1439,71 @@ export default function Ide() {
         </CommandList>
       </CommandDialog>
 
+      {/* Unsaved-changes confirmation */}
+      <Dialog
+        open={unsavedPrompt !== null}
+        onOpenChange={(open) => !open && !unsavedBusy && setUnsavedPrompt(null)}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <AlertTriangle className="size-4 text-amber-500" /> Unsaved changes
+            </DialogTitle>
+            <DialogDescription>
+              {unsavedPrompt?.kind === "close-tab"
+                ? `"${unsavedPrompt.path}" has unsaved changes. Save it before closing the tab?`
+                : `${dirtyPaths.size} file${dirtyPaths.size === 1 ? "" : "s"} with unsaved changes. Save before leaving the project?`}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:justify-between">
+            <Button variant="ghost" size="sm" disabled={unsavedBusy} onClick={() => setUnsavedPrompt(null)}>
+              Cancel
+            </Button>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={unsavedBusy}
+                onClick={() => void resolveUnsaved("discard")}
+              >
+                {unsavedPrompt?.kind === "close-tab" ? "Close without saving" : "Leave without saving"}
+              </Button>
+              <Button size="sm" disabled={unsavedBusy} onClick={() => void resolveUnsaved("save")}>
+                {unsavedBusy
+                  ? "Saving…"
+                  : unsavedPrompt?.kind === "close-tab"
+                    ? "Save & close"
+                    : "Save all & leave"}
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Toast */}
       {toast && (
         <div className="pointer-events-none fixed bottom-10 left-1/2 z-50 -translate-x-1/2 rounded-md border border-border bg-popover px-4 py-2 text-sm text-popover-foreground shadow-lg">
           {toast}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Shown when a project genuinely has no files yet — an empty project is a
+ *  starting point, not an error. */
+function EmptyProjectState({ onCreateFile }: { onCreateFile: () => void }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+      <FilePlus2 className="size-7 text-muted-foreground/40" />
+      <p className="text-sm font-medium text-foreground/80">This project is empty</p>
+      <p className="max-w-xs text-xs leading-relaxed text-muted-foreground">
+        Add your first file to start coding. You can also import an existing project as a ZIP from
+        the dashboard.
+      </p>
+      <Button size="sm" variant="outline" className="mt-2" onClick={onCreateFile}>
+        <FilePlus2 className="size-3.5" /> New file
+      </Button>
     </div>
   );
 }

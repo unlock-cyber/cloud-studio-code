@@ -2,6 +2,7 @@ import '@vly-ai/integrations';
 import { Toaster } from "@/components/ui/sonner";
 import { RequireAuth } from "@/components/RequireAuth";
 import { GuestTransferGate } from "@/components/GuestTransferGate";
+import { IdeRecovery } from "@/components/ide/IdeRecovery";
 import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
@@ -155,7 +156,9 @@ createRoot(document.getElementById("root")!).render(
                 path="/ide/:projectId"
                 element={
                   <RequireAuth>
-                    <Ide />
+                    <IdeRecovery>
+                      <Ide />
+                    </IdeRecovery>
                   </RequireAuth>
                 }
               />

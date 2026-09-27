@@ -1,21 +1,76 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, type MutationCtx } from "./_generated/server";
 import {
   peekActiveWorkspace,
   requireActiveWorkspace,
   formatBytes,
 } from "./workspaces";
+import { deleteBlobIfUnreferenced } from "./blobCleanup";
 import { Id } from "./_generated/dataModel";
 
 const MAX_PROJECT_NAME = 60;
 
-function validateProjectName(name: string) {
-  if (!name || name.length > MAX_PROJECT_NAME) {
+/**
+ * Validates AND normalizes a project name — callers persist the returned
+ * value. Trimming happens here so a name can never be stored as blank or with
+ * stray outer whitespace (which would render as an indistinguishable empty
+ * title on the dashboard).
+ */
+function validateProjectName(name: string): string {
+  const trimmed = name.trim().replace(/\s+/g, " ");
+  if (!trimmed || trimmed.length > MAX_PROJECT_NAME) {
     throw new Error(`Project name must be 1-${MAX_PROJECT_NAME} characters`);
   }
-  if (/[\\/:*?"<>|]/.test(name)) {
+  if (/[\\/:*?"<>|]/.test(trimmed)) {
     throw new Error('Project name contains invalid characters: \\ / : * ? " < > |');
   }
+  return trimmed;
+}
+
+/** Project names are listed side by side, so renaming into a name another
+ *  active project already uses is rejected with a clear message instead of
+ *  silently producing two identical-looking entries. */
+async function assertProjectNameIsFree(
+  ctx: MutationCtx,
+  workspaceId: Id<"workspaces">,
+  name: string,
+  exceptProjectId?: Id<"projects">,
+) {
+  const projects = await ctx.db
+    .query("projects")
+    .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+    .collect();
+  const taken = projects.some(
+    (p) =>
+      p._id !== exceptProjectId &&
+      p.status === "active" &&
+      p.name.trim().toLowerCase() === name.toLowerCase(),
+  );
+  if (taken) {
+    throw new Error(`A project named "${name}" already exists — choose another name.`);
+  }
+}
+
+/** "<base>", "<base> 2", "<base> 3" … — the first name this workspace has free. */
+async function uniqueProjectName(
+  ctx: MutationCtx,
+  workspaceId: Id<"workspaces">,
+  base: string,
+): Promise<string> {
+  const projects = await ctx.db
+    .query("projects")
+    .withIndex("by_workspace", (q) => q.eq("workspaceId", workspaceId))
+    .collect();
+  const taken = new Set(
+    projects.filter((p) => p.status === "active").map((p) => p.name.trim().toLowerCase()),
+  );
+  let candidate = base.slice(0, MAX_PROJECT_NAME).trim() || "Copy";
+  let n = 2;
+  while (taken.has(candidate.toLowerCase())) {
+    const suffix = ` ${n++}`;
+    candidate = base.slice(0, MAX_PROJECT_NAME - suffix.length).trim() + suffix;
+  }
+  return candidate;
 }
 
 // ---------------------------------------------------------------------------
@@ -81,7 +136,7 @@ export const create = mutation({
   },
   handler: async (ctx, { name, template, language, files, entryFile }) => {
     const ws = await requireActiveWorkspace(ctx);
-    validateProjectName(name);
+    const projectName = validateProjectName(name);
 
     const totalBytes = files.reduce(
       (sum, f) => sum + new Blob([f.content]).size,
@@ -96,7 +151,7 @@ export const create = mutation({
     const now = Date.now();
     const projectId = await ctx.db.insert("projects", {
       workspaceId: ws._id,
-      name,
+      name: projectName,
       template,
       language,
       entryFile,
@@ -174,8 +229,14 @@ export const rename = mutation({
     if (!project || project.workspaceId !== ws._id) {
       throw new Error("Project not found");
     }
-    validateProjectName(name);
-    await ctx.db.patch(projectId, { name });
+    const projectName = validateProjectName(name);
+    if (projectName !== project.name) {
+      await assertProjectNameIsFree(ctx, ws._id, projectName, projectId);
+    }
+    // Renaming only touches the project's display name — files, folders,
+    // template, entry file and session are left exactly as they are.
+    await ctx.db.patch(projectId, { name: projectName });
+    return { name: projectName };
   },
 });
 
@@ -192,9 +253,10 @@ export const remove = mutation({
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
       .collect();
     let freed = 0;
+    const blobIds: Id<"_storage">[] = [];
     for (const f of files) {
       freed += f.size;
-      if (f.blobId) await ctx.storage.delete(f.blobId);
+      if (f.blobId) blobIds.push(f.blobId);
       await ctx.db.delete(f._id);
     }
     const dbs = await ctx.db
@@ -203,10 +265,15 @@ export const remove = mutation({
     .collect();
     for (const db of dbs) {
       freed += db.size;
-      await ctx.storage.delete(db.blobId);
+      blobIds.push(db.blobId);
       await ctx.db.delete(db._id);
     }
     await ctx.db.delete(projectId);
+    // Only now that the documents are gone: free the blobs, skipping any that
+    // a duplicated project (or duplicated file) still points at.
+    for (const blobId of blobIds) {
+      await deleteBlobIfUnreferenced(ctx, ws._id, blobId);
+    }
     await ctx.db.patch(ws._id, {
       usedBytes: Math.max(0, ws.usedBytes - freed),
       lastActivityAt: Date.now(),
@@ -227,25 +294,37 @@ export const duplicate = mutation({
       .query("files")
       .withIndex("by_project", (q) => q.eq("projectId", projectId))
       .collect();
-
-    const totalBytes = files
+    const fileBytes = files
       .filter((f) => !f.isFolder)
       .reduce((sum, f) => sum + f.size, 0);
-    if (totalBytes > ws.storageLimitBytes - ws.usedBytes) {
+    if (fileBytes > ws.storageLimitBytes - ws.usedBytes) {
       throw new Error("Not enough storage left to duplicate this project");
     }
 
     const now = Date.now();
     const newId = await ctx.db.insert("projects", {
       workspaceId: ws._id,
-      name: `${project.name} copy`,
+      name: await uniqueProjectName(ctx, ws._id, `${project.name} copy`),
       template: project.template,
       language: project.language,
       entryFile: project.entryFile,
       status: "active",
       createdAt: now,
       lastOpenedAt: now,
+      // The copy opens with the same editor session, so it feels like a
+      // continuation rather than a blank project.
+      openTabs: project.openTabs,
+      activeFile: project.activeFile,
     });
+
+    // Every file gets its own document. Binary files share the underlying
+    // storage blob: a stored blob is immutable and content-addressed, and
+    // mutations can't re-upload one (storage.get/store are action-only), so
+    // sharing is what keeps the copy byte-identical. Deletion is
+    // reference-checked (see blobCleanup.ts), and writing to a file in either
+    // project only touches that project's own document — so the duplicate
+    // behaves as a fully independent project and the original is untouched.
+    let copiedBytes = 0;
     for (const f of files) {
       await ctx.db.insert("files", {
         projectId: newId,
@@ -257,9 +336,11 @@ export const duplicate = mutation({
         size: f.size,
         updatedAt: now,
       });
+      if (!f.isFolder) copiedBytes += f.size;
     }
+
     await ctx.db.patch(ws._id, {
-      usedBytes: ws.usedBytes + totalBytes,
+      usedBytes: Math.max(0, ws.usedBytes + copiedBytes),
       lastActivityAt: now,
       expiresAt: now + ws.inactivityLimitMs,
     });

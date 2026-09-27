@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import {
   ChevronRight,
   ChevronDown,
-  File as FileIcon,
   Folder,
   FolderOpen,
   Plus,
@@ -11,6 +10,7 @@ import {
   Pencil,
   Copy,
   Download,
+  ArrowRightLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   buildTree,
   fileIconMeta,
   type FileMeta,
@@ -43,12 +50,37 @@ type Props = {
   dirtyPaths: Set<string>;
   onOpenFile: (path: string) => void;
   onCreate: (parentFolder: string | null, isFolder: boolean) => void;
-  /** Called with (oldPath, newPath) once the user confirms the rename/move dialog. */
-  onRename: (path: string, newPath: string) => void;
-  onDelete: (path: string) => void;
+  /**
+   * Renames and/or moves an entry. Rejects with an Error whose message is
+   * safe to show the user (conflicts, invalid names, …) — the dialogs keep
+   * the user's input and display it inline instead of closing silently.
+   */
+  onRename: (path: string, newPath: string) => Promise<void>;
+  /** Deletes an entry (and, for folders, everything inside it). Rejects like `onRename`. */
+  onDelete: (path: string) => Promise<void>;
   onDuplicate: (path: string) => void;
   onDownloadFile: (path: string) => void;
 };
+
+const MAX_NAME_LENGTH = 80;
+const INVALID_NAME = /[\\/:*?"<>|]/;
+// Radix Select rejects empty-string item values, so the project root uses a
+// sentinel and is mapped back to "" (no parent folder).
+const ROOT_DESTINATION = "__root__";
+
+/** Client-side mirror of the server's path rules, for instant feedback. */
+function validateName(raw: string): string | null {
+  const name = raw.trim();
+  if (!name) return "Enter a file or folder name.";
+  if (name.length > MAX_NAME_LENGTH) {
+    return `Names can be at most ${MAX_NAME_LENGTH} characters.`;
+  }
+  if (INVALID_NAME.test(name)) {
+    return 'Names can\'t contain \\ / : * ? " < > |';
+  }
+  if (name === "." || name === "..") return "That name isn't allowed.";
+  return null;
+}
 
 export function FileExplorer({
   files,
@@ -64,8 +96,11 @@ export function FileExplorer({
 }: Props) {
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [renaming, setRenaming] = useState<{ path: string; isFolder: boolean; value: string } | null>(null);
+  const [renaming, setRenaming] = useState<{ path: string; isFolder: boolean; name: string } | null>(null);
+  const [moving, setMoving] = useState<{ path: string; isFolder: boolean; dest: string } | null>(null);
   const [deleting, setDeleting] = useState<{ path: string; isFolder: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const tree = useMemo(() => buildTree(files), [files]);
 
@@ -77,6 +112,8 @@ export function FileExplorer({
       .map((f) => ({ id: f._id, path: f.path, name: f.name, isFolder: false, children: [] as TreeNode[] }));
   }, [tree, files, query]);
 
+  const openTabsSet = useMemo(() => new Set(openTabs), [openTabs]);
+
   const toggleFolder = (path: string) => {
     setCollapsed((prev) => {
       const next = new Set(prev);
@@ -86,10 +123,91 @@ export function FileExplorer({
     });
   };
 
+  const parentOf = (path: string) =>
+    path.includes("/") ? path.slice(0, path.lastIndexOf("/") + 1) : "";
+
+  /** Close whichever dialog is open and clear its error state. */
+  const closeDialogs = () => {
+    setRenaming(null);
+    setMoving(null);
+    setDeleting(null);
+    setError(null);
+    setBusy(false);
+  };
+
+  const submitRename = async () => {
+    if (!renaming) return;
+    const name = renaming.name.trim();
+    const invalid = validateName(name);
+    if (invalid) {
+      setError(invalid);
+      return;
+    }
+    const newPath = parentOf(renaming.path) + name;
+    if (newPath === renaming.path) {
+      closeDialogs();
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await onRename(renaming.path, newPath);
+      closeDialogs();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Rename failed. Please try again.");
+      setBusy(false);
+    }
+  };
+
+  const submitMove = async () => {
+    if (!moving) return;
+    const name = moving.path.split("/").pop() ?? moving.path;
+    const newPath = moving.dest ? `${moving.dest}/${name}` : name;
+    if (newPath === moving.path) {
+      closeDialogs();
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await onRename(moving.path, newPath);
+      closeDialogs();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Move failed. Please try again.");
+      setBusy(false);
+    }
+  };
+
+  const submitDelete = async () => {
+    if (!deleting) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await onDelete(deleting.path);
+      closeDialogs();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed. Please try again.");
+      setBusy(false);
+    }
+  };
+
+  // Move destinations: the project root plus every existing folder, minus
+  // anything inside the entry being moved (a folder can't contain itself).
+  const moveDestinations = useMemo(() => {
+    const entry = moving?.path;
+    const folders = files
+      .filter((f) => f.isFolder)
+      .map((f) => f.path)
+      .filter((p) => !entry || (p !== entry && !p.startsWith(entry + "/")))
+      .sort((a, b) => a.localeCompare(b));
+    return ["", ...folders];
+  }, [files, moving?.path]);
+
   const renderNode = (node: TreeNode, depth: number) => {
     const isCollapsed = collapsed.has(node.path);
     const isActive = !node.isFolder && activeFile === node.path;
     const isDirty = !node.isFolder && dirtyPaths.has(node.path);
+    const isOpen = !node.isFolder && openTabsSet.has(node.path);
     const icon = fileIconMeta(node.name);
 
     const row = (
@@ -124,7 +242,13 @@ export function FileExplorer({
                 {icon.label}
               </span>
             </span>
-            <span className={`truncate ${isDirty ? "text-amber-600 dark:text-amber-300" : ""}`}>{node.name}</span>
+            <span
+              className={`truncate ${
+                isDirty ? "text-amber-600 dark:text-amber-300" : isOpen ? "" : "text-muted-foreground"
+              }`}
+            >
+              {node.name}
+            </span>
             {isDirty && <span className="text-[10px] text-amber-500 dark:text-amber-400">●</span>}
           </>
         )}
@@ -135,25 +259,26 @@ export function FileExplorer({
       <div key={node.id}>
         <ContextMenu>
           <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
-          <ContextMenuContent className="w-48">
+          <ContextMenuContent className="w-52">
             {!node.isFolder && (
               <ContextMenuItem onClick={() => onOpenFile(node.path)}>Open</ContextMenuItem>
             )}
-            <ContextMenuItem onClick={() => setRenaming({ path: node.path, isFolder: node.isFolder, value: node.name })}>
-              <Pencil className="mr-2 size-3.5" /> Rename / Move
+            <ContextMenuItem onClick={() => { setError(null); setRenaming({ path: node.path, isFolder: node.isFolder, name: node.name }); }}>
+              <Pencil className="mr-2 size-3.5" /> Rename
             </ContextMenuItem>
-            {!node.isFolder && (
-              <ContextMenuItem onClick={() => onDuplicate(node.path)}>
-                <Copy className="mr-2 size-3.5" /> Duplicate
-              </ContextMenuItem>
-            )}
+            <ContextMenuItem onClick={() => { setError(null); setMoving({ path: node.path, isFolder: node.isFolder, dest: parentOf(node.path).replace(/\/$/, "") }); }}>
+              <ArrowRightLeft className="mr-2 size-3.5" /> Move to…
+            </ContextMenuItem>
+            <ContextMenuItem onClick={() => onDuplicate(node.path)}>
+              <Copy className="mr-2 size-3.5" /> Duplicate
+            </ContextMenuItem>
             {!node.isFolder && (
               <ContextMenuItem onClick={() => onDownloadFile(node.path)}>
                 <Download className="mr-2 size-3.5" /> Download
               </ContextMenuItem>
             )}
             <ContextMenuSeparator />
-            <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleting({ path: node.path, isFolder: node.isFolder })}>
+            <ContextMenuItem className="text-destructive focus:text-destructive" onClick={() => { setError(null); setDeleting({ path: node.path, isFolder: node.isFolder }); }}>
               <Trash2 className="mr-2 size-3.5" /> Delete
             </ContextMenuItem>
           </ContextMenuContent>
@@ -164,6 +289,8 @@ export function FileExplorer({
       </div>
     );
   };
+
+  const fileCount = files.filter((f) => !f.isFolder).length;
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -178,66 +305,108 @@ export function FileExplorer({
           </Button>
         </div>
       </div>
-      <div className="px-2 pb-1 pt-1.5">
-        <div className="relative">
-          <Search className="absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search files…"
-            className="h-7 border-border/60 bg-white/[0.03] pl-7 text-xs"
-          />
+      {fileCount > 0 && (
+        <div className="px-2 pb-1 pt-1.5">
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground/60" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search files…"
+              className="h-7 border-border/60 bg-white/[0.03] pl-7 text-xs"
+            />
+          </div>
         </div>
-      </div>
+      )}
       <div className="min-h-0 flex-1 overflow-auto px-1.5 pb-2">
         {filteredTree.length === 0 ? (
-          <p className="px-2 py-6 text-center text-xs text-muted-foreground/70">
-            {query ? "No files match your search." : "No files yet — create one with + above."}
-          </p>
+          <div className="px-3 py-6 text-center">
+            <p className="text-xs text-muted-foreground/70">
+              {query ? "No files match your search." : "This project is empty."}
+            </p>
+            {!query && (
+              <Button size="sm" variant="outline" className="mt-3 h-7 text-xs" onClick={() => onCreate(null, false)}>
+                <Plus className="size-3.5" /> New file
+              </Button>
+            )}
+          </div>
         ) : (
           filteredTree.map((node) => renderNode(node, 0))
         )}
       </div>
 
-      {/* Rename / move dialog: accepts nested paths like folder/name.ext */}
-      <Dialog open={renaming !== null} onOpenChange={(open) => !open && setRenaming(null)}>
+      {/* Rename dialog */}
+      <Dialog open={renaming !== null} onOpenChange={(open) => !open && !busy && closeDialogs()}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-base">{renaming?.isFolder ? "Rename / move folder" : "Rename / move file"}</DialogTitle>
+            <DialogTitle className="text-base">
+              Rename {renaming?.isFolder ? "folder" : "file"}
+            </DialogTitle>
             <DialogDescription>
-              Enter a new name — or a full path (e.g. <code>src/utils/helpers.ts</code>) to move it.
+              {renaming?.path} — files inside stay where they are.
             </DialogDescription>
           </DialogHeader>
           <Input
             autoFocus
-            value={renaming?.value ?? ""}
-            onChange={(e) => setRenaming((r) => (r ? { ...r, value: e.target.value } : r))}
+            value={renaming?.name ?? ""}
+            disabled={busy}
+            onChange={(e) => setRenaming((r) => (r ? { ...r, name: e.target.value } : r))}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && renaming) {
-                const parent = renaming.path.includes("/") ? renaming.path.slice(0, renaming.path.lastIndexOf("/") + 1) : "";
-                onRename(renaming.path, parent + renaming.value.replace(/^\/+/, ""));
-                setRenaming(null);
-              }
+              if (e.key === "Enter") void submitRename();
+              if (e.key === "Escape") closeDialogs();
             }}
           />
+          {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
           <DialogFooter>
-            <Button variant="ghost" size="sm" onClick={() => setRenaming(null)}>Cancel</Button>
-            <Button
-              size="sm"
-              onClick={() => {
-                if (!renaming) return;
-                const parent = renaming.path.includes("/") ? renaming.path.slice(0, renaming.path.lastIndexOf("/") + 1) : "";
-                onRename(renaming.path, parent + renaming.value.replace(/^\/+/, ""));
-                setRenaming(null);
-              }}
-            >
-              Apply
+            <Button variant="ghost" size="sm" disabled={busy} onClick={closeDialogs}>Cancel</Button>
+            <Button size="sm" disabled={busy} onClick={() => void submitRename()}>
+              {busy ? "Renaming…" : "Rename"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
+      {/* Move dialog */}
+      <Dialog open={moving !== null} onOpenChange={(open) => !open && !busy && closeDialogs()}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">
+              Move {moving?.isFolder ? "folder" : "file"}
+            </DialogTitle>
+            <DialogDescription>
+              {moving?.path} — pick a destination folder. Existing folders inside a moved folder come along.
+            </DialogDescription>
+          </DialogHeader>
+          <Select
+            value={moving?.dest ? moving.dest : ROOT_DESTINATION}
+            onValueChange={(value) =>
+              setMoving((m) => (m ? { ...m, dest: value === ROOT_DESTINATION ? "" : value } : m))
+            }
+            disabled={busy}
+          >
+            <SelectTrigger className="h-8 text-sm">
+              <SelectValue placeholder="Project root" />
+            </SelectTrigger>
+            <SelectContent>
+              {moveDestinations.map((dest) => (
+                <SelectItem key={dest || ROOT_DESTINATION} value={dest || ROOT_DESTINATION}>
+                  {dest || "Project root"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
+          <DialogFooter>
+            <Button variant="ghost" size="sm" disabled={busy} onClick={closeDialogs}>Cancel</Button>
+            <Button size="sm" disabled={busy} onClick={() => void submitMove()}>
+              {busy ? "Moving…" : "Move"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation */}
+      <Dialog open={deleting !== null} onOpenChange={(open) => !open && !busy && closeDialogs()}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-base">Delete {deleting?.isFolder ? "folder" : "file"}</DialogTitle>
@@ -245,19 +414,14 @@ export function FileExplorer({
               {deleting?.isFolder
                 ? `"${deleting?.path}" and everything inside it will be permanently deleted.`
                 : `"${deleting?.path}" will be permanently deleted.`}
+              {dirtyPaths.has(deleting?.path ?? "") && " It has unsaved changes."}
             </DialogDescription>
           </DialogHeader>
+          {error && <p className="text-xs text-destructive" role="alert">{error}</p>}
           <DialogFooter>
-            <Button variant="ghost" size="sm" onClick={() => setDeleting(null)}>Cancel</Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => {
-                if (deleting) onDelete(deleting.path);
-                setDeleting(null);
-              }}
-            >
-              Delete
+            <Button variant="ghost" size="sm" disabled={busy} onClick={closeDialogs}>Cancel</Button>
+            <Button variant="destructive" size="sm" disabled={busy} onClick={() => void submitDelete()}>
+              {busy ? "Deleting…" : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>

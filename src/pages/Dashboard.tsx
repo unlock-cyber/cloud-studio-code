@@ -51,11 +51,30 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { formatBytesClient, formatDate } from "@/lib/clientHelpers";
+import { formatBytesClient, formatDate, formatRelativeTime } from "@/lib/clientHelpers";
 import { TEMPLATE_PICKER } from "@/lib/projectTemplates";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { storeGuestContext, sessionIdFromAuthToken } from "@/lib/guestContext";
 import { useAuthToken } from "@convex-dev/auth/react";
+
+/** A project counts as "recent" while it was opened within this window. */
+const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+const RECENT_LIMIT = 3;
+const MAX_PROJECT_NAME = 60;
+
+/** Client-side mirror of the server's project-name rules, so the dialog can
+ *  point at the problem before a round-trip. */
+function validateProjectNameClient(raw: string): string | null {
+  const name = raw.trim().replace(/\s+/g, " ");
+  if (!name) return "Enter a project name.";
+  if (name.length > MAX_PROJECT_NAME) {
+    return `Project names can be at most ${MAX_PROJECT_NAME} characters.`;
+  }
+  if (/[\\/:*?"<>|]/.test(name)) {
+    return 'Project names can\'t contain \\ / : * ? " < > |';
+  }
+  return null;
+}
 
 const TEMPLATE_META_LABEL: Record<string, string> = {
   blank: "Blank",
@@ -95,6 +114,8 @@ export default function Dashboard() {
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ id: Id<"projects">; name: string } | null>(null);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [renameBusy, setRenameBusy] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: Id<"projects">; name: string } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -158,7 +179,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (searchParams.get("expired") === "1") {
-      showToast("Your previous workspace expired and its data was deleted server-side.");
+      showToast(
+        "Your previous workspace expired after inactivity, so its contents were removed. You're starting with a fresh workspace.",
+      );
     }
   }, [searchParams, showToast]);
 
@@ -195,13 +218,32 @@ export default function Dashboard() {
 
   const handleRename = useCallback(async () => {
     if (!renaming) return;
-    try {
-      await renameProject({ projectId: renaming.id, name: renaming.name });
-      setRenaming(null);
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : "Failed to rename");
+    const invalid = validateProjectNameClient(renaming.name);
+    if (invalid) {
+      setRenameError(invalid);
+      return;
     }
-  }, [renaming, renameProject, showToast]);
+    const name = renaming.name.trim().replace(/\s+/g, " ");
+    const clash = (projects ?? []).some(
+      (p) => p._id !== renaming.id && p.name.trim().toLowerCase() === name.toLowerCase(),
+    );
+    if (clash) {
+      setRenameError(`A project named "${name}" already exists — choose another name.`);
+      return;
+    }
+    setRenameBusy(true);
+    setRenameError(null);
+    try {
+      await renameProject({ projectId: renaming.id, name });
+      setRenaming(null);
+      showToast("Project renamed");
+    } catch (e) {
+      // The dialog stays open with the message so the name can be fixed.
+      setRenameError(e instanceof Error ? e.message : "Rename failed. Please try again.");
+    } finally {
+      setRenameBusy(false);
+    }
+  }, [renaming, projects, renameProject, showToast]);
 
   const handleDelete = useCallback(async () => {
     if (!deleteTarget) return;
@@ -298,6 +340,12 @@ export default function Dashboard() {
     );
   }
 
+  // Recent activity is derived from the projects' own `lastOpenedAt` stamp
+  // (refreshed whenever a project is opened in the IDE) — no separate
+  // history is kept.
+  const recentCutoff = Date.now() - RECENT_WINDOW_MS;
+  const recentProjects = projects.filter((p) => p.lastOpenedAt >= recentCutoff).slice(0, RECENT_LIMIT);
+
   const usedPct = Math.min(100, (workspace.usedBytes / workspace.storageLimitBytes) * 100);
   const timeLeftMs = workspace.expiresAt - Date.now();
   const hoursLeft = Math.max(0, timeLeftMs / 3_600_000);
@@ -336,6 +384,38 @@ export default function Dashboard() {
       </header>
 
       <main className="mx-auto max-w-6xl px-3 py-8 sm:px-4">
+        {/* Recent projects — continue where you left off */}
+        <section className="mb-6">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            <Clock className="size-3.5" /> Recent projects
+          </h2>
+          {recentProjects.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border/60 px-4 py-4 text-xs leading-relaxed text-muted-foreground">
+              {projects.length === 0
+                ? "Projects you open show up here, newest first."
+                : "Nothing opened in the last week — pick one below to jump back in."}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {recentProjects.map((p) => (
+                <button
+                  key={p._id}
+                  type="button"
+                  onClick={() => navigate(`/ide/${p._id}`)}
+                  className="group rounded-lg border border-border/60 bg-card p-3 text-left transition-colors hover:border-emerald-500/50"
+                >
+                  <p className="truncate text-sm font-medium group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
+                    {p.name}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {TEMPLATE_META_LABEL[p.template] ?? p.template} · opened {formatRelativeTime(p.lastOpenedAt)}
+                  </p>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+
         {/* Workspace status */}
         <div className="mb-8 flex flex-col gap-4 rounded-xl border border-border/60 bg-card p-5 sm:flex-row sm:items-center">
           <div className="flex-1">
@@ -380,9 +460,9 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Projects */}
+        {/* All projects */}
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Your projects ({projects.length})
+          All projects ({projects.length})
         </h2>
         {projects.length === 0 ? (
           <Card className="border-dashed">
@@ -492,20 +572,50 @@ export default function Dashboard() {
       </Dialog>
 
       {/* Rename dialog */}
-      <Dialog open={renaming !== null} onOpenChange={(open) => !open && setRenaming(null)}>
+      <Dialog
+        open={renaming !== null}
+        onOpenChange={(open) => {
+          if (open || renameBusy) return;
+          setRenaming(null);
+          setRenameError(null);
+        }}
+      >
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Rename project</DialogTitle>
+            <DialogDescription>
+              Only the project's name changes — its files, folders and settings stay as they are.
+            </DialogDescription>
           </DialogHeader>
           <Input
             autoFocus
             value={renaming?.name ?? ""}
-            onChange={(e) => setRenaming((r) => (r ? { ...r, name: e.target.value } : r))}
+            disabled={renameBusy}
+            onChange={(e) => {
+              setRenameError(null);
+              setRenaming((r) => (r ? { ...r, name: e.target.value } : r));
+            }}
             onKeyDown={(e) => e.key === "Enter" && handleRename()}
           />
+          {renameError && (
+            <p className="text-xs text-destructive" role="alert">
+              {renameError}
+            </p>
+          )}
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setRenaming(null)}>Cancel</Button>
-            <Button onClick={handleRename}>Rename</Button>
+            <Button
+              variant="ghost"
+              disabled={renameBusy}
+              onClick={() => {
+                setRenaming(null);
+                setRenameError(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleRename} disabled={renameBusy}>
+              {renameBusy ? "Renaming…" : "Rename"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
