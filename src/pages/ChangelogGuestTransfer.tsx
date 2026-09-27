@@ -1,10 +1,22 @@
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePageMeta } from "@/lib/seo";
 
 export default function ChangelogGuestTransfer() {
   const navigate = useNavigate();
+  const location = useLocation();
+  // Leaving a post must never leave it sitting directly behind the changelog
+  // index: the index's own Back button steps through history, so an extra
+  // index entry would bounce the user straight back into this post. Opened
+  // from the index → step back exactly like the browser's Back button; opened
+  // directly (bookmark, shared link) → replace this entry with the index.
+  const fromChangelog =
+    (location.state as { fromChangelog?: boolean } | null)?.fromChangelog === true;
+  const backToChangelog = () => {
+    if (fromChangelog) navigate(-1);
+    else navigate("/changelog", { replace: true });
+  };
   usePageMeta({
     title: "Guest Workspace Transfer Improvements — Changelog",
     description:
@@ -20,7 +32,7 @@ export default function ChangelogGuestTransfer() {
             variant="ghost"
             size="sm"
             className="h-8 gap-2 text-muted-foreground hover:text-foreground"
-            onClick={() => navigate("/changelog")}
+            onClick={backToChangelog}
           >
             <ArrowLeft className="size-4" /> Back to Changelog
           </Button>

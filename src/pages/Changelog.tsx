@@ -43,7 +43,14 @@ export default function Changelog() {
         <div className="space-y-4">
           <button
             type="button"
-            onClick={() => navigate("/changelog/guest-workspace-transfer")}
+            onClick={() =>
+              // `fromChangelog` lets the post step back (instead of pushing a
+              // second /changelog entry) so this page's Back button can never
+              // bounce the user back into a post.
+              navigate("/changelog/guest-workspace-transfer", {
+                state: { fromChangelog: true },
+              })
+            }
             className="group block w-full rounded-xl border border-border/60 bg-card p-5 text-left transition-colors hover:border-emerald-500/50 sm:p-6"
           >
             <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
@@ -62,7 +69,11 @@ export default function Changelog() {
 
           <button
             type="button"
-            onClick={() => navigate("/changelog/introducing-cloud-studio-code")}
+            onClick={() =>
+              navigate("/changelog/introducing-cloud-studio-code", {
+                state: { fromChangelog: true },
+              })
+            }
             className="group block w-full rounded-xl border border-border/60 bg-card p-5 text-left transition-colors hover:border-emerald-500/50 sm:p-6"
           >
             <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
