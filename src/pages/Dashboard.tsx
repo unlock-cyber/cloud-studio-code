@@ -528,7 +528,7 @@ export default function Dashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Guest → account upgrade warning */}
+      {/* Guest → account upgrade confirmation */}
       <AlertDialog open={guestUpgradeOpen} onOpenChange={setGuestUpgradeOpen}>
         <AlertDialogContent className="max-w-md">
           <AlertDialogHeader>
@@ -540,10 +540,6 @@ export default function Dashboard() {
                 You are currently in a <strong>guest workspace</strong>. Creating an account will
                 sign you in and transfer your guest projects and files into your new account
                 automatically.
-              </span>
-              <span className="block">
-                As a precaution, we recommend <strong>exporting your projects</strong> first —
-                exported projects can be imported again later at any time.
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>

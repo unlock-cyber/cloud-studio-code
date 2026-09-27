@@ -16,6 +16,7 @@ const About = lazy(() => import("./pages/About.tsx"));
 const Privacy = lazy(() => import("./pages/Privacy.tsx"));
 const Terms = lazy(() => import("./pages/Terms.tsx"));const Changelog = lazy(() => import("./pages/Changelog.tsx"));
 const ChangelogPost = lazy(() => import("./pages/ChangelogPost.tsx"));
+const ChangelogGuestTransfer = lazy(() => import("./pages/ChangelogGuestTransfer.tsx"));
 const Contributions = lazy(() => import("./pages/Contributions.tsx"));
 const Backstage = lazy(() => import("./pages/Backstage.tsx"));
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
@@ -133,6 +134,7 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/terms" element={<Terms />} />
               <Route path="/changelog" element={<Changelog />} />
               <Route path="/changelog/introducing-cloud-studio-code" element={<ChangelogPost />} />
+              <Route path="/changelog/guest-workspace-transfer" element={<ChangelogGuestTransfer />} />
               <Route path="/contributions" element={<Contributions />} />
               <Route path="/backstage" element={<Backstage />} />
               <Route

@@ -40,24 +40,45 @@ export default function Changelog() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => navigate("/changelog/introducing-cloud-studio-code")}
-          className="group block w-full rounded-xl border border-border/60 bg-card p-5 text-left transition-colors hover:border-emerald-500/50 sm:p-6"
-        >
-          <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-            <Sparkles className="size-3.5" />
-            Initial release
-          </div>
-          <h2 className="mt-2 text-xl font-bold tracking-tight text-foreground transition-colors group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
-            Introducing Cloud Studio Code
-          </h2>
-          <p className="mt-1.5 text-sm text-muted-foreground">20 September 2026</p>
-          <div className="mt-4 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors group-hover:text-foreground">
-            Read the announcement
-            <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-          </div>
-        </button>
+        <div className="space-y-4">
+          <button
+            type="button"
+            onClick={() => navigate("/changelog/guest-workspace-transfer")}
+            className="group block w-full rounded-xl border border-border/60 bg-card p-5 text-left transition-colors hover:border-emerald-500/50 sm:p-6"
+          >
+            <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <Sparkles className="size-3.5" />
+              Improvement
+            </div>
+            <h2 className="mt-2 text-xl font-bold tracking-tight text-foreground transition-colors group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
+              Guest Workspace Transfer Improvements
+            </h2>
+            <p className="mt-1.5 text-sm text-muted-foreground">27 September 2026</p>
+            <div className="mt-4 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors group-hover:text-foreground">
+              Read the update
+              <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate("/changelog/introducing-cloud-studio-code")}
+            className="group block w-full rounded-xl border border-border/60 bg-card p-5 text-left transition-colors hover:border-emerald-500/50 sm:p-6"
+          >
+            <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <Sparkles className="size-3.5" />
+              Initial release
+            </div>
+            <h2 className="mt-2 text-xl font-bold tracking-tight text-foreground transition-colors group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
+              Introducing Cloud Studio Code
+            </h2>
+            <p className="mt-1.5 text-sm text-muted-foreground">20 September 2026</p>
+            <div className="mt-4 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors group-hover:text-foreground">
+              Read the announcement
+              <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+            </div>
+          </button>
+        </div>
       </main>
     </div>
   );
