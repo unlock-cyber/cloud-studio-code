@@ -192,8 +192,13 @@ export default function Ide() {
     if (!isAuthenticated) return;
     const refreshGuestContext = () => {
       if (workspace?.kind !== "guest" || !providerToken) return;
-      const sessionId = sessionIdFromAuthToken(providerToken);
-      if (sessionId) storeGuestContext({ workspaceId: workspace._id, sessionId });
+      // The session id is only an extra ownership proof server-side; the
+      // workspace id is what the hand-off needs, so an unreadable token must
+      // not stop the context (and its TTL) from being refreshed.
+      storeGuestContext({
+        workspaceId: workspace._id,
+        sessionId: sessionIdFromAuthToken(providerToken),
+      });
     };
     refreshGuestContext();
     const interval = window.setInterval(() => {

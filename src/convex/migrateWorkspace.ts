@@ -114,7 +114,12 @@ export const migrateFromGuest = mutation({
       return { migrated: false, reason: "owner-not-found" };
     }
     if (!guestUser.isAnonymous) {
-      // Never move a registered user's workspace.
+      // The workspace already belongs to a registered account. When that
+      // account is the caller, the hand-off has already happened — a retry
+      // after a lost response, or a double attempt — so report success
+      // instead of failing for data that is already owned by this account.
+      // Any other owner is an attempt to move a different account's data.
+      if (ws.userId === authUserId) return { migrated: true };
       throw new Error("Refusing to migrate a non-guest workspace");
     }
     if (guestSessionId) {

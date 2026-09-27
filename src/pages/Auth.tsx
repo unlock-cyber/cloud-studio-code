@@ -5,17 +5,10 @@ import { useAuth } from "@/hooks/use-auth";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { BetaBadge } from "@/components/BetaBadge";
 import { BrandMark } from "@/components/BrandMark";
-import { TerminalSquare, Check, AlertTriangle } from "lucide-react";
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
+import { TerminalSquare, Check } from "lucide-react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api";
-import {
-  captureGuestContext,
-  clearGuestContext,
-  storeGuestContext,
-} from "@/lib/guestContext";
+import { captureGuestContext, storeGuestContext } from "@/lib/guestContext";
 
 interface AuthProps {
   redirectAfterAuth?: string;
@@ -56,110 +49,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Real staged status during the guest → account transition. Each stage is
-  // only shown AFTER the corresponding operation has actually completed.
-  const [upgradeStage, setUpgradeStage] = useState<
-    | null
-    | "signed-in"
-    | "transferring"
-    | "transferred"
-    | "redirecting"
-    | "transfer-failed"
-  >(null);
-  // Why the transfer failed, when the server could say so precisely. Drives
-  // an honest failure message (e.g. "nothing left to transfer" vs "data
-  // preserved — retry").
-  const [transferFailureReason, setTransferFailureReason] = useState<string | null>(null);
-  const migrate = useMutation(api.migrateWorkspace.migrateFromGuest);
 
-  // Guest-upgrade bookkeeping: while the guest workspace migration is in
-  // flight, the auth state has ALREADY flipped to the new registered user —
-  // the redirect effect below must hold off until the migration finishes,
-  // otherwise the dashboard provisions a fresh empty workspace first and the
-  // guest data never gets moved.
+  // Guest-upgrade bookkeeping: the redirect effect below is held off while
+  // an upgrade is being set up, so it can never race the guest hand-off.
   const migrationPendingRef = useRef(false);
-
-  // Move the guest workspace (all of its projects/files/databases) into the
-  // freshly authenticated account. Called right after the OTP sign-in
-  // resolves and again from the failure panel's "Retry transfer" action: the
-  // stored guest context is only cleared once the server confirms the move,
-  // so a retry still knows which workspace to move.
-  //
-  // Outcomes:
-  //  - "migrated":    the move committed; the full-page redirect to
-  //                   /dashboard has been issued, so do not navigate again.
-  //  - "failed":      nothing was moved (the mutation is atomic); the failure
-  //                   panel is showing and the redirect effect stays
-  //                   suppressed so nothing can race the panel away.
-  //  - "no-context":  there was no guest context to migrate.
-  const runGuestTransfer = useCallback(async (): Promise<
-    "migrated" | "failed" | "no-context"
-  > => {
-    const guest = captureGuestContext();
-    if (!guest) return "no-context";
-    migrationPendingRef.current = true;
-    try {
-      // Step 1 done: the session is authenticated.
-      setUpgradeStage("signed-in");
-      // Step 2: transferring the workspace (mutation in flight).
-      setUpgradeStage("transferring");
-      let result: { migrated: boolean; reason?: string } | undefined = undefined;
-      try {
-        result = await migrate({
-          guestWorkspaceId: (guest.workspaceId || undefined) as never,
-          guestSessionId: guest.sessionId || undefined,
-        });
-      } catch (e) {
-        // The mutation is atomic: nothing was written server-side, so the
-        // guest workspace/projects/files are fully preserved and the user
-        // can retry. Show the failure state — never a false success.
-        console.error("Guest workspace migration failed:", e);
-        setTransferFailureReason(null);
-        setUpgradeStage("transfer-failed");
-        setIsLoading(false);
-        return "failed";
-      }
-      if (!result || !result.migrated) {
-        // Explicit non-success from the mutation: the guest data was NOT
-        // moved. Keep the guest context so the transfer can be retried.
-        console.error("Guest workspace migration did not complete:", result?.reason);
-        setTransferFailureReason(result?.reason ?? null);
-        setUpgradeStage("transfer-failed");
-        setIsLoading(false);
-        return "failed";
-      }
-      // Step 3 done: the move completed inside the mutation. Clear the guest
-      // context only now that the transfer is confirmed.
-      clearGuestContext();
-      setUpgradeStage("transferred");
-      // Step 4: the mutation's atomic cleanup (guest sessions, account, user
-      // record) committed together with the move, so cleanup is confirmed
-      // complete only now. Render the redirecting status SYNCHRONOUSLY
-      // (React state updates are otherwise async and the navigation below
-      // would beat the re-render, hiding the message).
-      flushSync(() => {
-        setUpgradeStage("redirecting");
-      });
-      // Full page reload directly to /dashboard. `replace` prevents the dead
-      // guest session from lingering in history. NOTE: do NOT reset
-      // migrationPendingRef here — keeping the auth-redirect effect
-      // suppressed guarantees no SPA navigation can race the unload and leave
-      // the user on stale guest UI.
-      window.location.replace("/dashboard");
-      return "migrated";
-    } catch (e) {
-      // Unexpected client-side error between stages. The migration may or may
-      // not have committed — the guest context is deliberately NOT cleared
-      // (the server-side move is atomic: either it committed or the guest
-      // data is untouched), and the redirect suppression stays on so no
-      // navigation can race this failure UI.
-      console.error("Guest upgrade transition failed:", e);
-      setTransferFailureReason(null);
-      setUpgradeStage("transfer-failed");
-      setIsLoading(false);
-      return "failed";
-    }
-  }, [migrate]);
 
   useEffect(() => {
     // Registered users visiting /auth while signed in are bounced to the app,
@@ -183,10 +76,9 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     setError(null);
     // A guest is about to authenticate: from this moment the redirect effect
     // below is suppressed. `signIn` flips auth state reactively, and letting
-    // the effect fire in that window would send the app to /dashboard and
-    // provision a fresh empty authenticated workspace BEFORE the guest
-    // migration has run — stranding the guest data. The suppression lasts
-    // until the migration finishes (success or failure).
+    // the effect fire in that window would send the app to /dashboard before
+    // the guest hand-off has been set up (the OTP handler below takes over
+    // with a full page load of its own).
     const pendingGuest = captureGuestContext();
     if (pendingGuest) {
       migrationPendingRef.current = true;
@@ -224,22 +116,31 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       const formData = new FormData(event.currentTarget);
       await signIn("email-otp", formData);
 
-      // Guest upgrade: the OTP sign-in leaves the previous anonymous user
-      // behind (it does not link to that session), so the guest workspace is
-      // moved into the new account before entering the dashboard. The
-      // migration is atomic server-side: on failure the guest data is
-      // untouched and the failure panel below stays visible.
+      // Guest upgrade: the OTP sign-in creates a brand-new registered user +
+      // session; it never links to the anonymous guest user the workspace
+      // belongs to, so the guest workspace has to be moved into the new
+      // account.
       //
-      // The redirect effect is suppressed while the transfer runs
-      // (migrationPendingRef), because `isAuthenticated` has already flipped
-      // true by the time signIn resolves — navigating now would provision an
-      // empty workspace first.
-      const outcome = await runGuestTransfer();
-      // A failed transfer keeps this screen (and the still-stored guest
-      // context, so it can be retried) — never a silent drop into a fresh
-      // empty workspace.
-      if (outcome === "failed") return;
-      if (outcome === "migrated") return;
+      // The move CANNOT be issued from this page. `@convex-dev/auth` swaps the
+      // provider token in memory and storage as soon as the OTP is accepted,
+      // but the live Convex websocket keeps authenticating its requests with
+      // the PREVIOUS (guest) token until its scheduled token refresh, and the
+      // client never re-runs `setAuth` on a guest → registered switch. A
+      // mutation issued here would be executed server-side as the anonymous
+      // guest, so it would be rejected — and every query issued here would
+      // still answer for the guest workspace, which is what made "Continue to
+      // dashboard" show guest data while a refresh showed an empty account.
+      //
+      // A full page load re-establishes the socket with the session that is
+      // now in storage. The stored guest context survives it (it is only
+      // cleared once the server confirms the move), and GuestTransferGate
+      // completes the hand-off under the registered identity.
+      const guest = captureGuestContext();
+      if (guest) {
+        migrationPendingRef.current = true;
+        window.location.replace("/dashboard");
+        return;
+      }
 
       // OTP verification creates a fresh registered user/session — it does
       // not link to the previous anonymous session. Always enter the
@@ -249,33 +150,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       navigate("/dashboard");
     } catch (error) {
       console.error("OTP verification error:", error);
-      setError(
-        error instanceof Error && /transferred|migrat/i.test(error.message)
-          ? error.message
-          : "The verification code you entered is incorrect.",
-      );
+      setError("The verification code you entered is incorrect.");
       setIsLoading(false);
       setOtp("");
     }
-  };
-
-  // Retry a transfer that reported failure: the guest context is still stored
-  // (it is only cleared on a confirmed move), so this re-runs the same atomic
-  // mutation for the same workspace.
-  const handleRetryTransfer = async () => {
-    setIsLoading(true);
-    setError(null);
-    setTransferFailureReason(null);
-    const outcome = await runGuestTransfer();
-    if (outcome !== "migrated") setIsLoading(false);
-  };
-
-  // Leave the failure state without a browser refresh. Nothing was moved or
-  // deleted server-side (the guest workspace is untouched), so this simply
-  // stops suppressing the auth redirect and enters the account.
-  const handleContinueAfterFailure = () => {
-    migrationPendingRef.current = false;
-    navigate("/dashboard");
   };
 
   const handleGuestLogin = async () => {
@@ -463,86 +341,12 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                     </InputOTP>
                   </div>
                   {error && <p className="mt-3 text-center text-sm text-red-500">{error}</p>}
-                  {upgradeStage === "transfer-failed" ? (
-                    <div
-                      className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5"
-                      role="alert"
-                    >
-                      <p className="flex items-center gap-2 text-xs font-medium text-amber-700 dark:text-amber-300">
-                        <AlertTriangle className="size-3.5 shrink-0" />
-                        Transfer could not be completed
-                      </p>
-                      <p className="mt-1.5 text-xs leading-relaxed text-amber-700/90 dark:text-amber-200/90">
-                        {transferFailureReason === "workspace-not-found"
-                          ? "The guest workspace could no longer be found on the server, so there was nothing left to transfer."
-                          : "Your guest workspace and every project and file in it were left untouched — nothing was moved, overwritten or deleted."}
-                      </p>
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="h-7"
-                          onClick={handleRetryTransfer}
-                          disabled={isLoading}
-                        >
-                          {isLoading ? "Retrying…" : "Retry transfer"}
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="h-7"
-                          onClick={handleContinueAfterFailure}
-                        >
-                          Continue to dashboard
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    upgradeStage && (
-                      <div
-                        className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5"
-                        role="status"
-                        aria-live="polite"
-                      >
-                        <ul className="space-y-1.5 text-xs">
-                          <UpgradeStageRow
-                            label="Signed in successfully"
-                            state={stageAtLeast(upgradeStage, "signed-in") ? "done" : "pending"}
-                          />
-                          <UpgradeStageRow
-                            label="Transferring your projects and files..."
-                            state={
-                              stageAtLeast(upgradeStage, "transferred")
-                                ? "done"
-                                : upgradeStage === "transferring"
-                                  ? "active"
-                                  : "pending"
-                            }
-                          />
-                          <UpgradeStageRow
-                            label="Transfer successful"
-                            state={stageAtLeast(upgradeStage, "transferred") ? "done" : "pending"}
-                          />
-                          <UpgradeStageRow
-                            label="Redirecting to /dashboard..."
-                            state={upgradeStage === "redirecting" ? "active" : "pending"}
-                          />
-                        </ul>
-                      </div>
-                    )
-                  )}
                   <Button
                     type="submit"
                     className="mt-5 w-full bg-emerald-600 text-white hover:bg-emerald-500"
-                    disabled={isLoading || otp.length !== 6 || !!upgradeStage && upgradeStage !== "transfer-failed"}
+                    disabled={isLoading || otp.length !== 6}
                   >
-                    {upgradeStage && upgradeStage !== "transfer-failed"
-                      ? "Upgrading your workspace…"
-                      : isLoading
-                        ? "Verifying…"
-                        : "Verify and continue"}
+                    {isLoading ? "Verifying…" : "Verify and continue"}
                   </Button>
                   <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                     <button
@@ -567,40 +371,6 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
         </div>
       </main>
     </div>
-  );
-}
-
-// Ordered stages of the guest → account upgrade, used to derive per-row state.
-const UPGRADE_STAGE_ORDER = ["signed-in", "transferring", "transferred", "redirecting"] as const;
-
-type UpgradeStage =
-  | (typeof UPGRADE_STAGE_ORDER)[number]
-  | "transfer-failed";
-
-function stageAtLeast(
-  current: Exclude<UpgradeStage, "transfer-failed">,
-  stage: Exclude<UpgradeStage, "transfer-failed">,
-): boolean {
-  return UPGRADE_STAGE_ORDER.indexOf(current) >= UPGRADE_STAGE_ORDER.indexOf(stage);
-}
-
-function UpgradeStageRow({ label, state }: { label: string; state: "pending" | "active" | "done" }) {
-  return (
-    <li
-      className={
-        "flex items-center gap-2 " +
-        (state === "pending" ? "text-muted-foreground" : "text-emerald-700 dark:text-emerald-300")
-      }
-    >
-      {state === "done" ? (
-        <Check className="size-3.5 shrink-0" />
-      ) : state === "active" ? (
-        <span className="size-3.5 shrink-0 animate-spin rounded-full border-2 border-emerald-500/30 border-t-emerald-500" />
-      ) : (
-        <span className="size-3.5 shrink-0 rounded-full border border-border" />
-      )}
-      {label}
-    </li>
   );
 }
 

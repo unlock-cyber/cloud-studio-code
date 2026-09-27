@@ -54,11 +54,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { formatBytesClient, formatDate } from "@/lib/clientHelpers";
 import { TEMPLATE_PICKER } from "@/lib/projectTemplates";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import {
-  storeGuestContext,
-  captureGuestContext,
-  sessionIdFromAuthToken,
-} from "@/lib/guestContext";
+import { storeGuestContext, sessionIdFromAuthToken } from "@/lib/guestContext";
 import { useAuthToken } from "@convex-dev/auth/react";
 
 const TEMPLATE_META_LABEL: Record<string, string> = {
@@ -110,10 +106,14 @@ export default function Dashboard() {
   const isGuest = workspace?.kind === "guest";
   useEffect(() => {
     if (isGuest && providerToken && workspace) {
-      const sessionId = sessionIdFromAuthToken(providerToken);
-      if (sessionId) {
-        storeGuestContext({ workspaceId: workspace._id, sessionId });
-      }
+      // The session id is only an *extra* ownership proof server-side, so an
+      // unreadable token must not stop the workspace id — the thing the
+      // hand-off actually needs — from being recorded. Recording nothing at
+      // all would silently skip the guest transfer.
+      storeGuestContext({
+        workspaceId: workspace._id,
+        sessionId: sessionIdFromAuthToken(providerToken),
+      });
     }
   }, [isGuest, providerToken, workspace]);
 
@@ -556,10 +556,10 @@ export default function Dashboard() {
                 // guarantees a fresh capture (id + session + timestamp) even
                 // if the background effect missed it or the entry went stale.
                 if (isGuest && providerToken && workspace) {
-                  const sessionId = sessionIdFromAuthToken(providerToken);
-                  if (sessionId) {
-                    storeGuestContext({ workspaceId: workspace._id, sessionId });
-                  }
+                  storeGuestContext({
+                    workspaceId: workspace._id,
+                    sessionId: sessionIdFromAuthToken(providerToken),
+                  });
                 }
                 navigate("/auth");
               }}
