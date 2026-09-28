@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePageMeta } from "@/lib/seo";
@@ -95,11 +95,13 @@ export default function ChangelogGuestTransfer() {
 
             <p>
               This is part of our ongoing work to make moving from a guest workspace to
-              an account seamless. If anything looks off, please tell us on the
-              <strong className="font-medium text-foreground">
-                {" "}
-                Bugs &amp; Contributions{" "}
-              </strong>
+              an account seamless. If anything looks off, please tell us on the{" "}
+              <Link
+                to="/contributions"
+                className="font-medium text-foreground underline underline-offset-2 transition-colors hover:text-emerald-600 dark:hover:text-emerald-400"
+              >
+                Bugs &amp; Contributions
+              </Link>{" "}
               page.
             </p>
           </div>

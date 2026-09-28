@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePageMeta } from "@/lib/seo";
@@ -152,8 +152,13 @@ export default function ChangelogPost() {
             <p>
               Cloud Studio Code is still under active development, and this changelog
               will be updated as things improve. If you hit a bug or have an idea you'd
-              like to see, we'd love to hear from you — please use the
-              <strong className="font-medium text-foreground"> Bugs &amp; Contributions </strong>
+              like to see, we'd love to hear from you — please use the{" "}
+              <Link
+                to="/contributions"
+                className="font-medium text-foreground underline underline-offset-2 transition-colors hover:text-emerald-600 dark:hover:text-emerald-400"
+              >
+                Bugs &amp; Contributions
+              </Link>{" "}
               page.
             </p>
           </div>
