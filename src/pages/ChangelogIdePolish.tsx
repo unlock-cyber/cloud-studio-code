@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePageMeta } from "@/lib/seo";
@@ -147,11 +147,13 @@ export default function ChangelogIdePolish() {
             <p>
               This is the first of a series of updates as we keep improving the editor.
               If anything looks off, or there's something you'd like to see next, please
-              tell us on the
-              <strong className="font-medium text-foreground">
-                {" "}
-                Bugs &amp; Contributions{" "}
-              </strong>
+              tell us on the{" "}
+              <Link
+                to="/contributions"
+                className="font-medium text-foreground underline underline-offset-2 transition-colors hover:text-emerald-600 dark:hover:text-emerald-400"
+              >
+                Bugs &amp; Contributions
+              </Link>{" "}
               page.
             </p>
           </div>
