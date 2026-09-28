@@ -324,7 +324,12 @@ export default function Landing() {
             <h2 className="text-2xl font-bold">What&rsquo;s New</h2>
             <div className="mt-6 flex flex-col gap-4 rounded-xl border border-border/60 bg-card p-5 transition-colors hover:border-emerald-500/30 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:p-6">
               <div className="min-w-0">
-                <h3 className="text-lg font-semibold sm:text-xl">{latestUpdate.title}</h3>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <h3 className="text-lg font-semibold sm:text-xl">{latestUpdate.title}</h3>
+                  <span className="inline-flex shrink-0 items-center rounded-full border border-emerald-500/25 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none tracking-wide text-emerald-600 dark:text-emerald-400">
+                    Latest
+                  </span>
+                </div>
                 <p className="mt-1 text-xs text-muted-foreground">{formatChangelogDate(latestUpdate.date)}</p>
               </div>
               <Link
