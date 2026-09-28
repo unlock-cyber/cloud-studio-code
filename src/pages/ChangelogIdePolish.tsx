@@ -45,7 +45,7 @@ export default function ChangelogIdePolish() {
           <div className="border-b border-border/60 pb-5">
             <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
               <Sparkles className="size-3.5" />
-              Update 1 · 28 September 2026
+              Enhancement · 28 September 2026
             </div>
             <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
               IDE Polish Update
