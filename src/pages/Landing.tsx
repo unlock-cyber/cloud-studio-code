@@ -324,7 +324,7 @@ export default function Landing() {
             <h2 className="text-2xl font-bold">What&rsquo;s New</h2>
             <Link
               to={latestUpdate.path}
-              className="group mt-6 flex cursor-pointer flex-col gap-4 rounded-xl border border-border/60 bg-card p-5 text-left transition-colors hover:border-emerald-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:p-6"
+              className="group mt-6 flex cursor-pointer flex-col gap-4 rounded-xl border border-border/60 bg-card p-5 text-left transition-colors hover:border-emerald-500/30 hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:p-6"
             >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
