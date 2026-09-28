@@ -993,7 +993,7 @@ export default function Ide() {
           <div className="flex h-full min-h-0 flex-col">
             {mobilePanel === "editor" && (
               <>
-                <div className="flex h-9 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border/60 bg-[#0D1117] px-1">
+                <div className="flex h-9 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border/60 bg-background px-1">
                   {tabs.length === 0 && (
                     <span className="px-3 text-xs text-muted-foreground/70">No open files</span>
                   )}
@@ -1010,7 +1010,7 @@ export default function Ide() {
                         }`}
                         onClick={() => openFile(t.path)}
                       >
-                        <span className="rounded-sm px-0.5 text-[8px] font-bold" style={{ color: icon.color, border: `1px solid ${icon.color}55` }}>
+                        <span className="rounded-sm px-0.5 text-[8px] font-bold whitespace-nowrap shrink-0" style={{ color: icon.color, border: `1px solid ${icon.color}55` }}>
                           {icon.label}
                         </span>
                         <span className="max-w-[110px] truncate">{t.path.split("/").pop()}</span>
@@ -1114,7 +1114,7 @@ export default function Ide() {
                 <Panel defaultSize={65} minSize={25}>
                   <div className="flex h-full min-h-0 flex-col">
                     {/* Tabs */}
-                    <div className="flex h-9 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border/60 bg-[#0D1117] px-1">
+                    <div className="flex h-9 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border/60 bg-background px-1">
                     {tabs.length === 0 && (
                       <span className="px-3 text-xs text-muted-foreground/70">No open files — pick one from the explorer</span>
                     )}
@@ -1131,7 +1131,7 @@ export default function Ide() {
                           }`}
                           onClick={() => openFile(t.path)}
                         >
-                          <span className="rounded-sm px-0.5 text-[8px] font-bold" style={{ color: icon.color, border: `1px solid ${icon.color}55` }}>
+                          <span className="rounded-sm px-0.5 text-[8px] font-bold whitespace-nowrap shrink-0" style={{ color: icon.color, border: `1px solid ${icon.color}55` }}>
                             {icon.label}
                           </span>
                           <span className="max-w-[140px] truncate">{t.path.split("/").pop()}</span>

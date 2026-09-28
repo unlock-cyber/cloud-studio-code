@@ -236,7 +236,7 @@ export function FileExplorer({
           <>
             <span className="ml-[18px] inline-flex w-4 shrink-0 justify-center">
               <span
-                className="rounded-sm px-0.5 text-[8px] font-bold leading-4"
+                className="rounded-sm px-0.5 text-[8px] font-bold leading-4 whitespace-nowrap shrink-0"
                 style={{ color: icon.color, border: `1px solid ${icon.color}55` }}
               >
                 {icon.label}
