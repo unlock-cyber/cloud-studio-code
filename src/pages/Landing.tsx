@@ -317,6 +317,28 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* What's New — latest changelog entry */}
+      {latestUpdate && (
+        <section className="border-t border-border/60 py-16">
+          <div className="mx-auto max-w-6xl px-4">
+            <h2 className="text-2xl font-bold">What&rsquo;s New</h2>
+            <div className="mt-6 flex flex-col gap-4 rounded-xl border border-border/60 bg-card p-5 transition-colors hover:border-emerald-500/30 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:p-6">
+              <div className="min-w-0">
+                <h3 className="text-lg font-semibold sm:text-xl">{latestUpdate.title}</h3>
+                <p className="mt-1 text-xs text-muted-foreground">{formatChangelogDate(latestUpdate.date)}</p>
+              </div>
+              <Link
+                to={latestUpdate.path}
+                className="group inline-flex shrink-0 items-center gap-1 text-sm font-medium text-emerald-600 underline-offset-4 transition-colors hover:text-emerald-500 hover:underline dark:text-emerald-400 dark:hover:text-emerald-300"
+              >
+                Read update
+                <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* CTA */}
       <section className="border-t border-border/60 py-20">
         <div className="mx-auto max-w-3xl px-4 text-center">
@@ -335,32 +357,6 @@ export default function Landing() {
           )}
         </div>
       </section>
-
-      {/* What's New — latest changelog entry */}
-      {latestUpdate && (
-        <section className="border-t border-border/60 py-16">
-          <div className="mx-auto max-w-6xl px-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-              <div className="min-w-0">
-                <h2 className="text-2xl font-bold">What&rsquo;s New</h2>
-                <p className="mt-1.5 truncate text-sm font-medium text-foreground">
-                  {latestUpdate.title}
-                </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {formatChangelogDate(latestUpdate.date)}
-                </p>
-              </div>
-              <Link
-                to={latestUpdate.path}
-                className="group inline-flex shrink-0 items-center gap-1 text-sm font-medium text-emerald-600 underline-offset-4 transition-colors hover:text-emerald-500 hover:underline dark:text-emerald-400 dark:hover:text-emerald-300"
-              >
-                Read update
-                <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-              </Link>
-            </div>
-          </div>
-        </section>
-      )}
 
       <footer className="border-t border-border/60 py-10">
         <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4">
