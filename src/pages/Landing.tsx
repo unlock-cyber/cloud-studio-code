@@ -322,7 +322,10 @@ export default function Landing() {
         <section className="border-t border-border/60 py-16">
           <div className="mx-auto max-w-6xl px-4">
             <h2 className="text-2xl font-bold">What&rsquo;s New</h2>
-            <div className="mt-6 flex flex-col gap-4 rounded-xl border border-border/60 bg-card p-5 transition-colors hover:border-emerald-500/30 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:p-6">
+            <Link
+              to={latestUpdate.path}
+              className="group mt-6 flex cursor-pointer flex-col gap-4 rounded-xl border border-border/60 bg-card p-5 text-left transition-colors hover:border-emerald-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:p-6"
+            >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <h3 className="text-lg font-semibold sm:text-xl">{latestUpdate.title}</h3>
@@ -332,14 +335,11 @@ export default function Landing() {
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">{formatChangelogDate(latestUpdate.date)}</p>
               </div>
-              <Link
-                to={latestUpdate.path}
-                className="group inline-flex shrink-0 items-center gap-1 text-sm font-medium text-emerald-600 underline-offset-4 transition-colors hover:text-emerald-500 hover:underline dark:text-emerald-400 dark:hover:text-emerald-300"
-              >
+              <span className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-emerald-600 underline-offset-4 transition-colors group-hover:text-emerald-500 group-hover:underline dark:text-emerald-400 dark:group-hover:text-emerald-300">
                 Read update
                 <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-              </Link>
-            </div>
+              </span>
+            </Link>
           </div>
         </section>
       )}
