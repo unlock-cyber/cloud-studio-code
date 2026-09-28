@@ -161,6 +161,7 @@ export default function Ide() {
   const [newFileDialog, setNewFileDialog] = useState<{ isFolder: boolean } | null>(null);
   const [newFileName, setNewFileName] = useState("");
   const [newFileError, setNewFileError] = useState<string | null>(null);
+  const [creatingFile, setCreatingFile] = useState(false);
   const [pyodideState, setPyodideState] = useState<string>("idle");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -649,12 +650,13 @@ export default function Ide() {
   );
 
   const confirmCreate = useCallback(async () => {
-    if (!newFileDialog) return;
+    if (!newFileDialog || creatingFile) return;
     const path = newFileName.trim();
     if (!path) {
       setNewFileError("Enter a file or folder name.");
       return;
     }
+    setCreatingFile(true);
     try {
       await createFile({
         projectId,
@@ -671,8 +673,12 @@ export default function Ide() {
     } catch (e) {
       // Keep the dialog (and the typed path) so the name can be corrected.
       setNewFileError(e instanceof Error ? e.message : "Could not create that file. Please try again.");
+    } finally {
+      // Cleared on failure too, so a rejected create can't strand the dialog
+      // on a disabled "Creating…" button.
+      setCreatingFile(false);
     }
-  }, [newFileDialog, newFileName, createFile, projectId, openFile]);
+  }, [newFileDialog, newFileName, creatingFile, createFile, projectId, openFile]);
 
   /** Re-paths open tabs (and the active tab) after a rename/move, keeping
    *  unsaved drafts attached to the file they belong to. */
@@ -1314,7 +1320,7 @@ export default function Ide() {
       </Sheet>
 
       {/* New file/folder dialog */}
-      <Dialog open={newFileDialog !== null} onOpenChange={(open) => !open && setNewFileDialog(null)}>
+      <Dialog open={newFileDialog !== null} onOpenChange={(open) => !open && !creatingFile && setNewFileDialog(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="text-base">{newFileDialog?.isFolder ? "New folder" : "New file"}</DialogTitle>
@@ -1325,6 +1331,7 @@ export default function Ide() {
           <Input
             autoFocus
             value={newFileName}
+            disabled={creatingFile}
             onChange={(e) => {
               setNewFileError(null);
               setNewFileName(e.target.value);
@@ -1341,6 +1348,7 @@ export default function Ide() {
             <Button
               variant="ghost"
               size="sm"
+              disabled={creatingFile}
               onClick={() => {
                 setNewFileDialog(null);
                 setNewFileError(null);
@@ -1348,7 +1356,9 @@ export default function Ide() {
             >
               Cancel
             </Button>
-            <Button size="sm" onClick={confirmCreate}>Create</Button>
+            <Button size="sm" disabled={creatingFile} onClick={confirmCreate}>
+              {creatingFile ? "Creating…" : "Create"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

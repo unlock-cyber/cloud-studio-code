@@ -117,6 +117,7 @@ export default function Dashboard() {
   const [renameError, setRenameError] = useState<string | null>(null);
   const [renameBusy, setRenameBusy] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: Id<"projects">; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -246,26 +247,35 @@ export default function Dashboard() {
   }, [renaming, projects, renameProject, showToast]);
 
   const handleDelete = useCallback(async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
     try {
       await deleteProject({ projectId: deleteTarget.id });
       setDeleteTarget(null);
       showToast("Project deleted");
     } catch (e) {
       showToast(e instanceof Error ? e.message : "Failed to delete");
+    } finally {
+      // Always clears, so a failure can't leave the dialog stuck on
+      // "Deleting…" — the dialog stays open and the error is shown as a toast.
+      setDeleting(false);
     }
-  }, [deleteTarget, deleteProject, showToast]);
+  }, [deleteTarget, deleting, deleteProject, showToast]);
 
   const handleDuplicate = useCallback(
     async (projectId: Id<"projects">) => {
+      if (busy === `duplicate:${projectId}`) return;
+      setBusy(`duplicate:${projectId}`);
       try {
         await duplicateProject({ projectId });
         showToast("Project duplicated");
       } catch (e) {
         showToast(e instanceof Error ? e.message : "Failed to duplicate");
+      } finally {
+        setBusy(null);
       }
     },
-    [duplicateProject, showToast],
+    [busy, duplicateProject, showToast],
   );
 
   const handleExport = useCallback(
@@ -326,7 +336,10 @@ export default function Dashboard() {
   if (projects === undefined || workspace === undefined) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" />
+          <span className="text-sm">Loading your projects…</span>
+        </div>
       </div>
     );
   }
@@ -444,7 +457,7 @@ export default function Dashboard() {
           <Button className="gap-2" onClick={() => setShowNewDialog(true)}>
             <Plus className="size-4" /> New Project
           </Button>
-          <Button variant="outline" className="gap-2" onClick={() => fileInputRef.current?.click()}>
+          <Button variant="outline" className="gap-2" onClick={() => fileInputRef.current?.click()} disabled={busy === "import"}>
             {busy === "import" ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />} Import ZIP
           </Button>
           <input
@@ -505,8 +518,16 @@ export default function Dashboard() {
                         <DropdownMenuItem onClick={() => setRenaming({ id: p._id, name: p.name })}>
                           <Pencil className="mr-2 size-3.5" /> Rename
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDuplicate(p._id)}>
-                          <Copy className="mr-2 size-3.5" /> Duplicate
+                        <DropdownMenuItem
+                          onClick={() => handleDuplicate(p._id)}
+                          disabled={busy === `duplicate:${p._id}`}
+                        >
+                          {busy === `duplicate:${p._id}` ? (
+                            <Loader2 className="mr-2 size-3.5 animate-spin" />
+                          ) : (
+                            <Copy className="mr-2 size-3.5" />
+                          )}
+                          Duplicate
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleExport(p._id)}>
                           {busy === `export:${p._id}` ? (
@@ -621,7 +642,7 @@ export default function Dashboard() {
       </Dialog>
 
       {/* Delete dialog */}
-      <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && !deleting && setDeleteTarget(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -632,8 +653,10 @@ export default function Dashboard() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDelete}>Delete</Button>
+            <Button variant="ghost" disabled={deleting} onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="destructive" disabled={deleting} onClick={handleDelete}>
+              {deleting ? "Deleting…" : "Delete"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

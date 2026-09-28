@@ -39,7 +39,10 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   if (providerLoading || (convexLoading && !convexAuthenticated)) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" />
+          <span className="text-sm">Checking your session…</span>
+        </div>
       </main>
     );
   }
