@@ -2,6 +2,7 @@ import { useNavigate } from "react-router";
 import { ArrowLeft, ArrowRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePageMeta } from "@/lib/seo";
+import { CHANGELOG_ENTRIES, formatChangelogDate } from "@/lib/changelog";
 
 export default function Changelog() {
   const navigate = useNavigate();
@@ -41,80 +42,36 @@ export default function Changelog() {
         </div>
 
         <div className="space-y-4">
-          <button
-            type="button"
-            onClick={() =>
-              // `fromChangelog` lets the post step back (instead of pushing a
-              // second /changelog entry) so this page's Back button can never
-              // bounce the user back into a post.
-              navigate("/changelog/ide-polish-update", {
-                state: { fromChangelog: true },
-              })
-            }
-            className="group block w-full rounded-xl border border-border/60 bg-card p-5 text-left transition-colors hover:border-emerald-500/50 sm:p-6"
-          >
-            <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-              <Sparkles className="size-3.5" />
-              Enhancement
-            </div>
-            <h2 className="mt-2 text-xl font-bold tracking-tight text-foreground transition-colors group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
-              IDE Polish Update
-            </h2>
-            <p className="mt-1.5 text-sm text-muted-foreground">28 September 2026</p>
-            <div className="mt-4 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors group-hover:text-foreground">
-              Read the update
-              <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              // `fromChangelog` lets the post step back (instead of pushing a
-              // second /changelog entry) so this page's Back button can never
-              // bounce the user back into a post.
-              navigate("/changelog/guest-workspace-transfer", {
-                state: { fromChangelog: true },
-              })
-            }
-            className="group block w-full rounded-xl border border-border/60 bg-card p-5 text-left transition-colors hover:border-emerald-500/50 sm:p-6"
-          >
-            <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-              <Sparkles className="size-3.5" />
-              Improvement
-            </div>
-            <h2 className="mt-2 text-xl font-bold tracking-tight text-foreground transition-colors group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
-              Guest Workspace Transfer Improvements
-            </h2>
-            <p className="mt-1.5 text-sm text-muted-foreground">27 September 2026</p>
-            <div className="mt-4 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors group-hover:text-foreground">
-              Read the update
-              <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              navigate("/changelog/introducing-cloud-studio-code", {
-                state: { fromChangelog: true },
-              })
-            }
-            className="group block w-full rounded-xl border border-border/60 bg-card p-5 text-left transition-colors hover:border-emerald-500/50 sm:p-6"
-          >
-            <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-              <Sparkles className="size-3.5" />
-              Initial release
-            </div>
-            <h2 className="mt-2 text-xl font-bold tracking-tight text-foreground transition-colors group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
-              Introducing Cloud Studio Code
-            </h2>
-            <p className="mt-1.5 text-sm text-muted-foreground">20 September 2026</p>
-            <div className="mt-4 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors group-hover:text-foreground">
-              Read the announcement
-              <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-            </div>
-          </button>
+          {CHANGELOG_ENTRIES.map((entry) => (
+            <button
+              key={entry.path}
+              type="button"
+              onClick={() =>
+                // `fromChangelog` lets the post step back (instead of pushing a
+                // second /changelog entry) so this page's Back button can never
+                // bounce the user back into a post.
+                navigate(entry.path, {
+                  state: { fromChangelog: true },
+                })
+              }
+              className="group block w-full rounded-xl border border-border/60 bg-card p-5 text-left transition-colors hover:border-emerald-500/50 sm:p-6"
+            >
+              <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                <Sparkles className="size-3.5" />
+                {entry.badge}
+              </div>
+              <h2 className="mt-2 text-xl font-bold tracking-tight text-foreground transition-colors group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
+                {entry.title}
+              </h2>
+              <p className="mt-1.5 text-sm text-muted-foreground">
+                {formatChangelogDate(entry.date)}
+              </p>
+              <div className="mt-4 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors group-hover:text-foreground">
+                {entry.cta}
+                <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+              </div>
+            </button>
+          ))}
         </div>
       </main>
     </div>

@@ -26,6 +26,7 @@ import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth } from "convex/react";
 import { toast } from "sonner";
 import { usePageMeta, webSiteSchema } from "@/lib/seo";
+import { formatChangelogDate, latestChangelogEntry } from "@/lib/changelog";
 
 const FEATURES = [
   {
@@ -89,6 +90,10 @@ export default function Landing() {
   const user = useQuery(api.users.currentUser);
   const { signIn } = useAuthActions();
   const [guestBusy, setGuestBusy] = useState(false);
+
+  // Latest published changelog entry, straight from the changelog's own data
+  // source — nothing about the current update is hardcoded here.
+  const latestUpdate = latestChangelogEntry();
 
   // Auth-aware CTAs (BUG 4): a signed-in registered user or an existing guest
   // session gets a direct "Go to dashboard" action instead of Sign in.
@@ -330,6 +335,32 @@ export default function Landing() {
           )}
         </div>
       </section>
+
+      {/* What's New — latest changelog entry */}
+      {latestUpdate && (
+        <section className="border-t border-border/60 py-16">
+          <div className="mx-auto max-w-6xl px-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+              <div className="min-w-0">
+                <h2 className="text-2xl font-bold">What&rsquo;s New</h2>
+                <p className="mt-1.5 truncate text-sm font-medium text-foreground">
+                  {latestUpdate.title}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {formatChangelogDate(latestUpdate.date)}
+                </p>
+              </div>
+              <Link
+                to={latestUpdate.path}
+                className="group inline-flex shrink-0 items-center gap-1 text-sm font-medium text-emerald-600 underline-offset-4 transition-colors hover:text-emerald-500 hover:underline dark:text-emerald-400 dark:hover:text-emerald-300"
+              >
+                Read update
+                <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
 
       <footer className="border-t border-border/60 py-10">
         <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4">
