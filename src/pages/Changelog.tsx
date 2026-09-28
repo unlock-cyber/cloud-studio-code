@@ -47,6 +47,32 @@ export default function Changelog() {
               // `fromChangelog` lets the post step back (instead of pushing a
               // second /changelog entry) so this page's Back button can never
               // bounce the user back into a post.
+              navigate("/changelog/ide-polish-update", {
+                state: { fromChangelog: true },
+              })
+            }
+            className="group block w-full rounded-xl border border-border/60 bg-card p-5 text-left transition-colors hover:border-emerald-500/50 sm:p-6"
+          >
+            <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <Sparkles className="size-3.5" />
+              Update 1
+            </div>
+            <h2 className="mt-2 text-xl font-bold tracking-tight text-foreground transition-colors group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
+              IDE Polish Update
+            </h2>
+            <p className="mt-1.5 text-sm text-muted-foreground">28 September 2026</p>
+            <div className="mt-4 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors group-hover:text-foreground">
+              Read the update
+              <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              // `fromChangelog` lets the post step back (instead of pushing a
+              // second /changelog entry) so this page's Back button can never
+              // bounce the user back into a post.
               navigate("/changelog/guest-workspace-transfer", {
                 state: { fromChangelog: true },
               })
