@@ -17,6 +17,8 @@ const PUBLIC_PATHS = [
   { path: "/", priority: "1.0", changefreq: "weekly" },
   { path: "/changelog", priority: "0.8", changefreq: "weekly" },
   { path: "/changelog/introducing-cloud-studio-code", priority: "0.7", changefreq: "monthly" },
+  { path: "/changelog/guest-workspace-transfer", priority: "0.7", changefreq: "monthly" },
+  { path: "/changelog/ide-polish-update", priority: "0.7", changefreq: "monthly" },
   { path: "/about", priority: "0.6", changefreq: "monthly" },
   { path: "/contributions", priority: "0.5", changefreq: "monthly" },
   { path: "/privacy", priority: "0.3", changefreq: "yearly" },
