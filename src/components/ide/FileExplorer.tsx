@@ -61,6 +61,11 @@ type Props = {
   onDelete: (path: string) => Promise<void>;
   onDuplicate: (path: string) => void;
   onDownloadFile: (path: string) => void;
+  /**
+   * Read-only viewing (shared projects): no create/rename/delete/move actions
+   * are rendered at all — the explorer becomes a pure file browser.
+   */
+  readOnly?: boolean;
 };
 
 const MAX_NAME_LENGTH = 80;
@@ -94,6 +99,7 @@ export function FileExplorer({
   onDelete,
   onDuplicate,
   onDownloadFile,
+  readOnly = false,
 }: Props) {
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -284,6 +290,9 @@ export function FileExplorer({
 
     return (
       <div key={node.id}>
+        {readOnly ? (
+          row
+        ) : (
         <ContextMenu>
           <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
           <ContextMenuContent className="w-52">
@@ -310,6 +319,7 @@ export function FileExplorer({
             </ContextMenuItem>
           </ContextMenuContent>
         </ContextMenu>
+        )}
         {node.isFolder && !isCollapsed && (
           <div>{node.children.map((child) => renderNode(child, depth + 1))}</div>
         )}
@@ -323,14 +333,16 @@ export function FileExplorer({
     <div className="flex h-full flex-col bg-background">
       <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border/60 px-2 md:h-9">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Explorer</span>
-        <div className="ml-auto flex items-center gap-0.5">
-          <Button variant="ghost" size="sm" className="size-8 p-0 text-muted-foreground md:size-7" title="New file" onClick={() => onCreate(null, false)}>
-            <Plus className="size-4" />
-          </Button>
-          <Button variant="ghost" size="sm" className="size-8 p-0 text-muted-foreground md:size-7" title="New folder" onClick={() => onCreate(null, true)}>
-            <FolderPlusIcon />
-          </Button>
-        </div>
+        {!readOnly && (
+          <div className="ml-auto flex items-center gap-0.5">
+            <Button variant="ghost" size="sm" className="size-8 p-0 text-muted-foreground md:size-7" title="New file" onClick={() => onCreate(null, false)}>
+              <Plus className="size-4" />
+            </Button>
+            <Button variant="ghost" size="sm" className="size-8 p-0 text-muted-foreground md:size-7" title="New folder" onClick={() => onCreate(null, true)}>
+              <FolderPlusIcon />
+            </Button>
+          </div>
+        )}
       </div>
       {fileCount > 0 && (
         <div className="px-2 pb-1 pt-1.5">
@@ -351,7 +363,7 @@ export function FileExplorer({
             <p className="text-xs text-muted-foreground/70">
               {query ? "No files match your search." : "This project is empty."}
             </p>
-            {!query && (
+            {!query && !readOnly && (
               <Button size="sm" variant="outline" className="mt-3 h-7 text-xs" onClick={() => onCreate(null, false)}>
                 <Plus className="size-3.5" /> New file
               </Button>

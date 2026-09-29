@@ -36,6 +36,8 @@ type Props = {
   /** Current Auto Save preference, shown as a toggle in the editor toolbar. */
   autoSave?: boolean;
   onAutoSaveToggle?: () => void;
+  /** Read-only viewing (shared projects): no typing, no save/run commands. */
+  readOnly?: boolean;
 };
 
 export function CodeEditor({
@@ -52,6 +54,7 @@ export function CodeEditor({
   compact = false,
   autoSave = false,
   onAutoSaveToggle,
+  readOnly = false,
 }: Props) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const saveRef = useRef(onSave);
@@ -72,12 +75,16 @@ export function CodeEditor({
   const handleMount = (ed: editor.IStandaloneCodeEditor, m: Monaco) => {
     editorRef.current = ed;
     defineIdeTheme(m);
-    ed.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyS, () => {
-      saveRef.current();
-    });
-    ed.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.Enter, () => {
-      runRef.current();
-    });
+    // Read-only viewers get no save/run shortcuts: there is nothing to save
+    // and running belongs to the owner's workspace.
+    if (!readOnly) {
+      ed.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyS, () => {
+        saveRef.current();
+      });
+      ed.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.Enter, () => {
+        runRef.current();
+      });
+    }
 
     // Automatic closing tags for HTML / JSX / TSX / XML.
     // Monaco core has no autoClosingTags option (VS Code extension feature),
@@ -219,6 +226,14 @@ export function CodeEditor({
           {dirty && <span className="text-amber-500 dark:text-amber-400">●</span>}
           <span className="mx-1 text-border">|</span>
           <span className="hidden sm:inline">{lang.toUpperCase()}</span>
+          {readOnly && (
+            <>
+              <span className="mx-1 text-border">|</span>
+              <span className="rounded-full border border-border/60 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-muted-foreground uppercase">
+                Read-only
+              </span>
+            </>
+          )}
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-1">
           {onAutoSaveToggle && (
@@ -275,6 +290,8 @@ export function CodeEditor({
           onChange={(v: string | undefined) => onChange(v ?? "")}
           options={{
             fontSize,
+            readOnly,
+            domReadOnly: readOnly,
             wordWrap: wordWrap ? "on" : "off",
             minimap: { enabled: !compact, scale: 1 },
             scrollBeyondLastLine: false,

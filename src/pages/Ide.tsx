@@ -33,6 +33,7 @@ import {
   Globe,
   MoreHorizontal,
   AlertTriangle,
+  Share2,
 } from "lucide-react";
 import {
   Sheet,
@@ -47,20 +48,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-/** Narrow-viewport detection for the IDE's mobile single-panel workflow. */
-function useIsNarrowViewport() {
-  const [isNarrow, setIsNarrow] = useState(
-    () => typeof window !== "undefined" && window.innerWidth < 768,
-  );
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 767px)");
-    const update = () => setIsNarrow(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
-  return isNarrow;
-}
+import { useIsNarrowViewport } from "@/hooks/use-narrow-viewport";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useTheme } from "@/hooks/use-theme";
 import {
@@ -82,6 +70,7 @@ import {
   CommandItem,
 } from "@/components/ui/command";
 import { FileExplorer } from "@/components/ide/FileExplorer";
+import { ShareDialog } from "@/components/ide/ShareDialog";
 import { CodeEditor, type EditorTab } from "@/components/ide/CodeEditor";
 import { TerminalPanel, type TerminalLine } from "@/components/ide/TerminalPanel";
 import { PreviewPanel, type PreviewMessage } from "@/components/ide/PreviewPanel";
@@ -177,6 +166,7 @@ export default function Ide() {
   const [creatingFile, setCreatingFile] = useState(false);
   const [pyodideState, setPyodideState] = useState<string>("idle");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [autoSaving, setAutoSaving] = useState(false);
   const [runHistory, setRunHistory] = useState<RunHistoryEntry[]>([]);
@@ -1166,6 +1156,9 @@ export default function Ide() {
             <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-muted-foreground" onClick={handleExport} disabled={exporting} title="Export as ZIP">
               {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-4" />} Export
             </Button>
+            <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-muted-foreground" onClick={() => setShareOpen(true)} title="Share a read-only link">
+              <Share2 className="size-4" /> Share
+            </Button>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -1185,6 +1178,9 @@ export default function Ide() {
                   {exporting ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : <Download className="mr-2 size-3.5" />} Export ZIP
                 </DropdownMenuItem>
               </div>
+              <DropdownMenuItem onClick={() => setShareOpen(true)}>
+                <Share2 className="mr-2 size-3.5" /> Share project
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
                 <Palette className="mr-2 size-3.5" /> Editor settings
               </DropdownMenuItem>
@@ -1205,6 +1201,14 @@ export default function Ide() {
           </div>
         </div>
       </header>
+
+      {/* Read-only sharing (owner only) */}
+      <ShareDialog
+        projectId={projectId}
+        projectName={project.name}
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+      />
 
       {/* Main body */}
       <div className="min-h-0 flex-1">

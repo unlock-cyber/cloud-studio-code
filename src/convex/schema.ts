@@ -68,7 +68,13 @@ const schema = defineSchema(
       // persisted editor session
       openTabs: v.optional(v.array(v.string())),
       activeFile: v.optional(v.string()),
-    }).index("by_workspace", ["workspaceId"]),
+      // Read-only sharing. An opaque random token — never the document id —
+      // set while sharing is enabled and cleared when the owner revokes it.
+      // Looked up by the public shared-project queries only.
+      shareToken: v.optional(v.string()),
+    })
+      .index("by_workspace", ["workspaceId"])
+      .index("by_share_token", ["shareToken"]),
 
     files: defineTable({
       projectId: v.id("projects"),

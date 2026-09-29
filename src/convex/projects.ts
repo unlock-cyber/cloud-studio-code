@@ -379,5 +379,70 @@ export const setEntryFile = mutation({
 });
 
 // ---------------------------------------------------------------------------
+// Read-only sharing (owner side)
+// ---------------------------------------------------------------------------
+
+/**
+ * Opaque, unguessable share token. Random, never derived from (and never
+ * equal to) any database id — a leaked link only ever grants read access to
+ * the one project it was created for, and only until the owner revokes it.
+ */
+function newShareToken(): string {
+  return (
+    crypto.randomUUID().replace(/-/g, "") +
+    crypto.randomUUID().replace(/-/g, "")
+  );
+}
+
+/**
+ * Owner-only share state. The token is returned to the owner so the link can
+ * be re-copied later; it is never exposed to anyone else (every other project
+ * response omits it, and the public shared queries only accept it as input).
+ */
+export const getShare = query({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, { projectId }) => {
+    const ws = await peekActiveWorkspace(ctx);
+    if (!ws) return { enabled: false, token: null };
+    const project = await ctx.db.get(projectId);
+    if (!project || project.workspaceId !== ws._id) {
+      throw new Error("Project not found");
+    }
+    return {
+      enabled: project.shareToken !== undefined,
+      token: project.shareToken ?? null,
+    };
+  },
+});
+
+/**
+ * Enable or revoke read-only sharing for a project. Ownership is enforced
+ * exactly like every other project mutation, so a viewer who somehow obtained
+ * the share link still cannot call this.
+ *
+ * Enabling always mints a fresh token: a revoked link can never come back to
+ * life, and re-sharing produces a new URL.
+ */
+export const setSharing = mutation({
+  args: { projectId: v.id("projects"), enabled: v.boolean() },
+  handler: async (ctx, { projectId, enabled }) => {
+    const ws = await requireActiveWorkspace(ctx);
+    const project = await ctx.db.get(projectId);
+    if (!project || project.workspaceId !== ws._id) {
+      throw new Error("Project not found");
+    }
+    if (!enabled) {
+      if (project.shareToken !== undefined) {
+        await ctx.db.patch(projectId, { shareToken: undefined });
+      }
+      return { enabled: false, token: null };
+    }
+    const token = newShareToken();
+    await ctx.db.patch(projectId, { shareToken: token });
+    return { enabled: true, token };
+  },
+});
+
+// ---------------------------------------------------------------------------
 // ZIP import lives in importExport.ts (server-side extraction + validation)
 // ---------------------------------------------------------------------------

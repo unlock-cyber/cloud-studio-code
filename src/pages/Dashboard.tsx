@@ -49,7 +49,9 @@ import {
   MoreVertical,
   TerminalSquare,
   AlertTriangle,
+  Share2,
 } from "lucide-react";
+import { ShareDialog } from "@/components/ide/ShareDialog";
 import { useAuth } from "@/hooks/use-auth";
 import { formatBytesClient, formatDate, formatRelativeTime } from "@/lib/clientHelpers";
 import { TEMPLATE_PICKER } from "@/lib/projectTemplates";
@@ -117,6 +119,7 @@ export default function Dashboard() {
   const [renameError, setRenameError] = useState<string | null>(null);
   const [renameBusy, setRenameBusy] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: Id<"projects">; name: string } | null>(null);
+  const [shareTarget, setShareTarget] = useState<{ id: Id<"projects">; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -537,6 +540,9 @@ export default function Dashboard() {
                           )}
                           Export ZIP
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setShareTarget({ id: p._id, name: p.name })}>
+                          <Share2 className="mr-2 size-3.5" /> Share
+                        </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget({ id: p._id, name: p.name })}>
                           <Trash2 className="mr-2 size-3.5" /> Delete
@@ -660,6 +666,16 @@ export default function Dashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Read-only sharing for one project */}
+      {shareTarget && (
+        <ShareDialog
+          projectId={shareTarget.id}
+          projectName={shareTarget.name}
+          open
+          onOpenChange={() => setShareTarget(null)}
+        />
+      )}
 
       {/* Guest → account upgrade confirmation */}
       <AlertDialog open={guestUpgradeOpen} onOpenChange={setGuestUpgradeOpen}>
