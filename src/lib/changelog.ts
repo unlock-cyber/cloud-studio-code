@@ -24,7 +24,7 @@ export type ChangelogEntry = {
 const CHANGELOG: ChangelogEntry[] = [
   {
     path: "/changelog/collaboration-update",
-    title: "Project Sharing & Collaboration",
+    title: "Introducing Project Collaboration",
     date: "2026-09-29",
     badge: "New Feature",
     cta: "Read the update",

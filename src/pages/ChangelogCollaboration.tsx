@@ -18,7 +18,7 @@ export default function ChangelogCollaboration() {
     else navigate("/changelog", { replace: true });
   };
   usePageMeta({
-    title: "Project Sharing & Collaboration — Changelog",
+    title: "Introducing Project Collaboration — Changelog",
     description:
       "Share a project from Cloud Studio Code with a link: let people read the code and preview supported web projects without an account, and revoke sharing whenever you like.",
     path: "/changelog/collaboration-update",
@@ -45,10 +45,10 @@ export default function ChangelogCollaboration() {
           <div className="border-b border-border/60 pb-5">
             <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
               <Sparkles className="size-3.5" />
-              <span className="uppercase">Introducing Project Collaboration</span> · 29 September 2026
+              <span className="uppercase">New Feature</span> · 29 September 2026
             </div>
             <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
-              Project Sharing &amp; Collaboration
+              Introducing Project Collaboration
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
               Until now, a project in Cloud Studio Code was yours alone. This update adds
