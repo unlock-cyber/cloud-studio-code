@@ -20,6 +20,7 @@ const PUBLIC_PATHS = [
   { path: "/changelog/guest-workspace-transfer", priority: "0.7", changefreq: "monthly" },
   { path: "/changelog/ide-polish-update", priority: "0.7", changefreq: "monthly" },
   { path: "/changelog/ide-developer-ux-update", priority: "0.7", changefreq: "monthly" },
+  { path: "/changelog/collaboration-update", priority: "0.7", changefreq: "monthly" },
   { path: "/about", priority: "0.6", changefreq: "monthly" },
   { path: "/contributions", priority: "0.5", changefreq: "monthly" },
   { path: "/privacy", priority: "0.3", changefreq: "yearly" },
