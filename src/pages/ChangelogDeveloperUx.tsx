@@ -3,6 +3,7 @@ import { ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { usePageMeta } from "@/lib/seo";
+import { changelogEntry, changelogPageMeta, formatChangelogDate } from "@/lib/changelog";
 
 export default function ChangelogDeveloperUx() {
   const navigate = useNavigate();
@@ -18,12 +19,10 @@ export default function ChangelogDeveloperUx() {
     if (fromChangelog) navigate(-1);
     else navigate("/changelog", { replace: true });
   };
-  usePageMeta({
-    title: "Mobile & Developer UX — Changelog",
-    description:
-      "Cloud Studio Code gets Auto-Save on by default with clear per-workspace controls, a more comfortable IDE on phones, a deeper command palette, clearer terminal states and a lightweight recent run history.",
-    path: "/changelog/ide-developer-ux-update",
-  });
+  // Title, description, canonical and structured data all come from the changelog
+  // entry, so the document metadata can never disagree with this article.
+  const entry = changelogEntry("/changelog/ide-developer-ux-update");
+  usePageMeta(changelogPageMeta(entry));
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -46,10 +45,10 @@ export default function ChangelogDeveloperUx() {
           <div className="border-b border-border/60 pb-5">
             <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
               <Sparkles className="size-3.5" />
-              <span className="uppercase">Enhancement</span> · 29 September 2026
+              <span className="uppercase">{entry.badge}</span> · {formatChangelogDate(entry.date)}
             </div>
             <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
-              Mobile &amp; Developer UX
+              {entry.title}
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
               This update focuses on the everyday rhythm of writing code in Cloud Studio

@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePageMeta } from "@/lib/seo";
+import { changelogEntry, changelogPageMeta, formatChangelogDate } from "@/lib/changelog";
 
 export default function ChangelogPost() {
   const navigate = useNavigate();
@@ -17,12 +18,10 @@ export default function ChangelogPost() {
     if (fromChangelog) navigate(-1);
     else navigate("/changelog", { replace: true });
   };
-  usePageMeta({
-    title: "Introducing Cloud Studio Code — Changelog",
-    description:
-      "Launching Cloud Studio Code: a browser-based cloud IDE with a real editor, sandboxed code execution, live web previews and persistent cloud workspaces.",
-    path: "/changelog/introducing-cloud-studio-code",
-  });
+  // Title, description, canonical and structured data all come from the changelog
+  // entry, so the document metadata can never disagree with this article.
+  const entry = changelogEntry("/changelog/introducing-cloud-studio-code");
+  usePageMeta(changelogPageMeta(entry));
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -45,10 +44,10 @@ export default function ChangelogPost() {
           <div className="border-b border-border/60 pb-5">
             <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
               <Sparkles className="size-3.5" />
-              <span className="uppercase">Initial Release</span> · 20 September 2026
+              <span className="uppercase">{entry.badge}</span> · {formatChangelogDate(entry.date)}
             </div>
             <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
-              Introducing Cloud Studio Code
+              {entry.title}
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
               Today we're launching Cloud Studio Code — a complete development

@@ -23,6 +23,13 @@
     property="og:description"
     content="A browser-based development environment for writing, running and previewing code — with projects, files and a sandboxed runtime in the cloud."
   />
+  <!--
+    Relative on purpose: this static fallback must not hardcode the production
+    origin. Per-page metadata (src/lib/seo.ts) rewrites these as absolute URLs
+    from the single origin configuration once the app has mounted.
+  -->
+  <meta property="og:image" content="/apple-touch-icon.png" />
+  <meta property="og:image:alt" content="Cloud Studio Code — browser-based cloud IDE" />
 
   <!-- Twitter/X -->
   <meta name="twitter:card" content="summary" />
@@ -31,6 +38,7 @@
     name="twitter:description"
     content="A browser-based development environment for writing, running and previewing code — with projects, files and a sandboxed runtime in the cloud."
   />
+  <meta name="twitter:image" content="/apple-touch-icon.png" />
 
   <script type="application/ld+json">
     {

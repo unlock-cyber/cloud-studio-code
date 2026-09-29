@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePageMeta } from "@/lib/seo";
+import { changelogEntry, changelogPageMeta, formatChangelogDate } from "@/lib/changelog";
 
 export default function ChangelogIdePolish() {
   const navigate = useNavigate();
@@ -17,12 +18,10 @@ export default function ChangelogIdePolish() {
     if (fromChangelog) navigate(-1);
     else navigate("/changelog", { replace: true });
   };
-  usePageMeta({
-    title: "IDE Polish — Changelog",
-    description:
-      "Cloud Studio Code gets recent projects, project rename and duplicate, a more capable file explorer, stronger protection for unsaved changes, and clearer loading, empty and error states.",
-    path: "/changelog/ide-polish-update",
-  });
+  // Title, description, canonical and structured data all come from the changelog
+  // entry, so the document metadata can never disagree with this article.
+  const entry = changelogEntry("/changelog/ide-polish-update");
+  usePageMeta(changelogPageMeta(entry));
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -45,10 +44,10 @@ export default function ChangelogIdePolish() {
           <div className="border-b border-border/60 pb-5">
             <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
               <Sparkles className="size-3.5" />
-              <span className="uppercase">Enhancement</span> · 28 September 2026
+              <span className="uppercase">{entry.badge}</span> · {formatChangelogDate(entry.date)}
             </div>
             <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
-              IDE Polish
+              {entry.title}
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
               This update is all about making everyday work in the editor smoother and

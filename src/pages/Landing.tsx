@@ -84,7 +84,7 @@ export default function Landing() {
     description:
       "Cloud Studio Code is a browser-based cloud IDE: write and edit code in an online code editor, run Python, C++, Java, TypeScript and more in sandboxed runtimes, preview web projects live, and keep projects and files in your cloud workspace.",
     path: "/",
-    structuredData: webSiteSchema() ?? undefined,
+    structuredData: webSiteSchema(),
   });
   const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const user = useQuery(api.users.currentUser);

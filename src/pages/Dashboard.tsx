@@ -54,6 +54,7 @@ import {
 import { ShareDialog } from "@/components/ide/ShareDialog";
 import { useAuth } from "@/hooks/use-auth";
 import { formatBytesClient, formatDate, formatRelativeTime } from "@/lib/clientHelpers";
+import { usePageMeta } from "@/lib/seo";
 import { TEMPLATE_PICKER } from "@/lib/projectTemplates";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { storeGuestContext, sessionIdFromAuthToken } from "@/lib/guestContext";
@@ -93,6 +94,13 @@ const TEMPLATE_META_LABEL: Record<string, string> = {
 };
 
 export default function Dashboard() {
+  // Signed-in project management: no search presence, and no canonical of its
+  // own. A guest session on this page is still not a public page.
+  usePageMeta({
+    title: "Your projects — Cloud Studio Code",
+    description: "Your Cloud Studio Code projects, workspace storage and account.",
+    noindex: true,
+  });
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();

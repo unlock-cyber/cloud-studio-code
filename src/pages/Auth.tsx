@@ -9,6 +9,7 @@ import { TerminalSquare, Check } from "lucide-react";
 import { Suspense, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { captureGuestContext, storeGuestContext } from "@/lib/guestContext";
+import { usePageMeta } from "@/lib/seo";
 
 interface AuthProps {
   redirectAfterAuth?: string;
@@ -41,6 +42,14 @@ function CloudLines() {
 }
 
 function Auth({ redirectAfterAuth }: AuthProps = {}) {
+  // Sign-in is a functional page, not a landing page: noindex so the public
+  // marketing pages are the only Cloud Studio Code URLs in search results.
+  usePageMeta({
+    title: "Sign in — Cloud Studio Code",
+    description:
+      "Sign in to Cloud Studio Code, or continue as a guest — a browser-based cloud IDE with nothing to install.",
+    noindex: true,
+  });
   const { isLoading: authLoading, isAuthenticated, user, signIn } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();

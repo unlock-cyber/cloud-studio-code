@@ -95,6 +95,7 @@ import { startPyodideWarmup, subscribePyodideWarmup } from "@/lib/pyodideRunner"
 import { warmEsbuild } from "@/lib/tsRunner";
 import { formatBytesClient } from "@/lib/clientHelpers";
 import { sessionIdFromAuthToken, storeGuestContext } from "@/lib/guestContext";
+import { usePageMeta } from "@/lib/seo";
 import { useAuthToken } from "@convex-dev/auth/react";
 
 const RUNNABLE_LANGS: LangId[] = ["python", "javascript", "typescript", "c", "cpp", "java", "bash", "sql"];
@@ -104,6 +105,13 @@ const RUNNABLE_LANGS: LangId[] = ["python", "javascript", "typescript", "c", "cp
 const AUTOSAVE_DELAY_MS = 1200;
 
 export default function Ide() {
+  // A signed-in workspace page: kept out of search results (the rest of the
+  // app's metadata work lives in the public pages).
+  usePageMeta({
+    title: "Editor — Cloud Studio Code",
+    description: "Your Cloud Studio Code editor: files, runtimes, terminal and live preview.",
+    noindex: true,
+  });
   const { projectId: projectIdParam } = useParams();
   const navigate = useNavigate();
   const projectId = projectIdParam as Id<"projects">;

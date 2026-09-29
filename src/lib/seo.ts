@@ -1,37 +1,47 @@
 import { useEffect } from "react";
+import { PRODUCTION_ORIGIN, resolveSiteOrigin } from "@/lib/site";
 
 /**
  * Production site origin.
  *
- * Read from VITE_SITE_URL. Do NOT fall back to localhost, preview URLs, or a
- * guessed hostname — if the variable is not set, origin-dependent metadata
- * (canonical, og:url, sitemap link) is omitted rather than emitted with a
- * wrong value. Supply the real production origin via the VITE_SITE_URL
- * environment variable after deployment.
+ * A configured `VITE_SEO_SITE_URL` / `VITE_SITE_URL` takes precedence when it is
+ * a real public origin; otherwise the project's documented production origin is
+ * used. There is deliberately no fallback to `window.location` — preview,
+ * development and localhost hostnames must never end up in a canonical or
+ * og:url, and a Convex backend origin is never accepted.
  */
-export const SITE_URL: string | null = (() => {
-  const raw = (import.meta.env.VITE_SITE_URL as string | undefined)?.trim();
-  if (!raw) return null;
-  return raw.replace(/\/+$/, "");
-})();
+export const SITE_URL: string =
+  resolveSiteOrigin(
+    import.meta.env?.VITE_SEO_SITE_URL as string | undefined,
+    import.meta.env?.VITE_SITE_URL as string | undefined,
+  ) ?? PRODUCTION_ORIGIN;
 
-/** Absolute URL for a path, or null when the production origin is unknown. */
-export function absoluteUrl(path: string): string | null {
-  if (!SITE_URL) return null;
+/** Absolute URL for a path on the production origin. */
+export function absoluteUrl(path: string): string {
   return `${SITE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 /** Default social share image (existing branded asset). */
 export const OG_IMAGE_PATH = "/apple-touch-icon.png";
 
+/** Alt text for the share image — kept factual and brand-accurate. */
+const OG_IMAGE_ALT = "Cloud Studio Code — browser-based cloud IDE";
+
 type PageMeta = {
   title: string;
   description: string;
-  /** Path beginning with "/" for canonical/og:url. */
+  /** Path beginning with "/" for canonical/og:url. Omit on non-public pages. */
   path?: string;
-  /** Hide this page from search engines. */
+  /** Hide this page from search engines (and from social previews). */
   noindex?: boolean;
-  /** JSON-LD structured data to inject. */
+  /**
+   * Open Graph object type. Changelog articles pass "article" so
+   * `article:published_time` can carry their real publication date.
+   */
+  ogType?: "website" | "article";
+  /** ISO date (YYYY-MM-DD) of publication, for `ogType: "article"`. */
+  publishedTime?: string;
+  /** JSON-LD structured data to inject (the canonical `url` is added for you). */
   structuredData?: Record<string, unknown>;
 };
 
@@ -45,6 +55,10 @@ function upsertMeta(attr: "name" | "property", key: string, content: string) {
   el.setAttribute("content", content);
 }
 
+function removeMeta(attr: "name" | "property", key: string) {
+  document.head.querySelector<HTMLMetaElement>(`meta[${attr}="${key}"]`)?.remove();
+}
+
 function upsertLink(rel: string, href: string) {
   let el = document.head.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`);
   if (!el) {
@@ -55,57 +69,80 @@ function upsertLink(rel: string, href: string) {
   el.setAttribute("href", href);
 }
 
+function removeLink(rel: string) {
+  document.head.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`)?.remove();
+}
+
 /**
- * Declarative per-page document metadata. Restores nothing on unmount — each
- * page sets its own values, so the last-rendered page's metadata is always
- * correct. `noindex` pages (404) get a robots meta instead of a canonical.
+ * Declarative per-page document metadata.
+ *
+ * Only pages that declare themselves public (a `path` and no `noindex`) get a
+ * canonical URL and an og:url; every other page has both *removed*, so a
+ * private route can never inherit the canonical of the public page the visitor
+ * arrived from. `noindex` pages get a robots meta instead, which is why
+ * private areas stay out of search results even if a crawler ignores
+ * robots.txt.
  */
-export function usePageMeta({ title, description, path, noindex, structuredData }: PageMeta) {
+export function usePageMeta({
+  title,
+  description,
+  path,
+  noindex,
+  ogType = "website",
+  publishedTime,
+  structuredData,
+}: PageMeta) {
   useEffect(() => {
+    const isPublic = !noindex && Boolean(path);
+
     document.title = title;
-
     upsertMeta("name", "description", description);
+    upsertMeta("name", "robots", noindex ? "noindex, nofollow" : "index, follow");
 
-    if (noindex) {
-      upsertMeta("name", "robots", "noindex, nofollow");
-    } else {
-      upsertMeta("name", "robots", "index, follow");
-      if (path) {
-        const canonical = absoluteUrl(path);
-        // Only emit a canonical when the production origin is configured —
-        // never a localhost/preview URL.
-        if (canonical) upsertLink("canonical", canonical);
-      }
-    }
+    const canonical = isPublic && path ? absoluteUrl(path) : null;
+    if (canonical) upsertLink("canonical", canonical);
+    else removeLink("canonical");
 
-    const ogUrl = path ? absoluteUrl(path) : null;
     upsertMeta("property", "og:title", title);
     upsertMeta("property", "og:description", description);
-    upsertMeta("property", "og:type", "website");
+    upsertMeta("property", "og:type", ogType);
     upsertMeta("property", "og:site_name", "Cloud Studio Code");
-    if (ogUrl) upsertMeta("property", "og:url", ogUrl);
-    upsertMeta("property", "og:image", `${SITE_URL ?? ""}${OG_IMAGE_PATH}`);
+    upsertMeta("property", "og:image", absoluteUrl(OG_IMAGE_PATH));
+    upsertMeta("property", "og:image:alt", OG_IMAGE_ALT);
+    if (canonical) upsertMeta("property", "og:url", canonical);
+    else removeMeta("property", "og:url");
+
+    if (ogType === "article" && publishedTime) {
+      upsertMeta("property", "article:published_time", publishedTime);
+    } else {
+      removeMeta("property", "article:published_time");
+    }
 
     upsertMeta("name", "twitter:card", "summary");
     upsertMeta("name", "twitter:title", title);
     upsertMeta("name", "twitter:description", description);
+    upsertMeta("name", "twitter:image", absoluteUrl(OG_IMAGE_PATH));
 
-    // JSON-LD structured data, replaced on each navigation.
+    // JSON-LD structured data, replaced on each navigation. The canonical URL
+    // is attached here so every schema that describes a page gets it from the
+    // single origin configuration above.
     const ID = "csc-page-jsonld";
     document.getElementById(ID)?.remove();
     if (structuredData) {
       const script = document.createElement("script");
       script.id = ID;
       script.type = "application/ld+json";
-      script.textContent = JSON.stringify(structuredData);
+      script.textContent = JSON.stringify({
+        ...(canonical ? { url: canonical } : {}),
+        ...structuredData,
+      });
       document.head.appendChild(script);
     }
-  }, [title, description, path, noindex, structuredData]);
+  }, [title, description, path, noindex, ogType, publishedTime, structuredData]);
 }
 
 /** Site-wide WebApplication structured data — only verifiable facts. */
 export function webApplicationSchema() {
-  const url = absoluteUrl("/");
   return {
     "@context": "https://schema.org",
     "@type": "WebApplication",
@@ -114,19 +151,17 @@ export function webApplicationSchema() {
     operatingSystem: "Web",
     description:
       "A browser-based cloud IDE for writing, running and previewing code — with projects, files and a sandboxed runtime in the cloud.",
-    ...(url ? { url } : {}),
+    url: absoluteUrl("/"),
     offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
   };
 }
 
-/** WebSite structured data with the public-page SearchAction-free base. */
-export function webSiteSchema() {
-  const url = absoluteUrl("/");
-  if (!url) return null;
+/** WebSite structured data for the homepage. */
+export function webSiteSchema(): Record<string, unknown> {
   return {
     "@context": "https://schema.org",
     "@type": "WebSite",
     name: "Cloud Studio Code",
-    url,
+    url: absoluteUrl("/"),
   };
 }

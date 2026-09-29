@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { usePageMeta } from "@/lib/seo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,6 +55,12 @@ const SESSION_KEY = "csc.backstage.token";
 const SESSION_EXP_KEY = "csc.backstage.expiresAt";
 
 export default function Backstage() {
+  // Internal bug-triage area: never indexable, and never linked from the site.
+  usePageMeta({
+    title: "Backstage — Cloud Studio Code",
+    description: "Internal bug reports for Cloud Studio Code.",
+    noindex: true,
+  });
   const navigate = useNavigate();
   const [stage, setStage] = useState<"gate" | "password" | "in">("gate");
   const [password, setPassword] = useState("");

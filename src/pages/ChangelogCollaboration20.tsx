@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { ArrowLeft, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePageMeta } from "@/lib/seo";
+import { changelogEntry, changelogPageMeta, formatChangelogDate } from "@/lib/changelog";
 
 export default function ChangelogCollaboration20() {
   const navigate = useNavigate();
@@ -17,12 +18,10 @@ export default function ChangelogCollaboration20() {
     if (fromChangelog) navigate(-1);
     else navigate("/changelog", { replace: true });
   };
-  usePageMeta({
-    title: "Collaboration 2.0 — Changelog",
-    description:
-      "Collaboration 2.0 refines project sharing in Cloud Studio Code: see exactly what a shared link allows, preview the visitor's view, and get a clearer read-only experience for anyone you share with.",
-    path: "/changelog/collaboration-2-0",
-  });
+  // Title, description, canonical and structured data all come from the changelog
+  // entry, so the document metadata can never disagree with this article.
+  const entry = changelogEntry("/changelog/collaboration-2-0");
+  usePageMeta(changelogPageMeta(entry));
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -45,10 +44,10 @@ export default function ChangelogCollaboration20() {
           <div className="border-b border-border/60 pb-5">
             <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
               <Sparkles className="size-3.5" />
-              <span className="uppercase">Enhancement</span> · 29 September 2026
+              <span className="uppercase">{entry.badge}</span> · {formatChangelogDate(entry.date)}
             </div>
             <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
-              Collaboration 2.0
+              {entry.title}
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
               Sharing a project is one of the most useful things Cloud Studio Code does, so
