@@ -28,6 +28,7 @@ export type WorkspaceDoc = {
   editorTheme: "dark" | "light";
   fontSize: number;
   wordWrap: boolean;
+  autoSave?: boolean;
 };
 
 export function formatBytes(bytes: number): string {
@@ -145,6 +146,7 @@ async function createWorkspace(
     editorTheme: "dark",
     fontSize: 13,
     wordWrap: false,
+    autoSave: true,
   });
   return (await ctx.db.get(id)) as WorkspaceDoc;
 }
@@ -245,6 +247,8 @@ export const status = query({
       editorTheme: ws.editorTheme,
       fontSize: ws.fontSize,
       wordWrap: ws.wordWrap,
+      // Workspaces created before the setting existed default to on.
+      autoSave: ws.autoSave ?? true,
       expiredNow: isExpired(ws),
     };
   },
@@ -256,6 +260,7 @@ export const updateEditorSettings = mutation({
     editorTheme: v.optional(v.union(v.literal("dark"), v.literal("light"))),
     fontSize: v.optional(v.number()),
     wordWrap: v.optional(v.boolean()),
+    autoSave: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const ws = await requireActiveWorkspace(ctx);
@@ -264,6 +269,7 @@ export const updateEditorSettings = mutation({
     if (args.fontSize !== undefined)
       patch.fontSize = Math.min(24, Math.max(10, args.fontSize));
     if (args.wordWrap !== undefined) patch.wordWrap = args.wordWrap;
+    if (args.autoSave !== undefined) patch.autoSave = args.autoSave;
     await ctx.db.patch(ws._id, patch);
   },
 });

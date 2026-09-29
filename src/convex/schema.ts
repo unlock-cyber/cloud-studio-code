@@ -48,6 +48,10 @@ const schema = defineSchema(
       editorTheme: v.union(v.literal("dark"), v.literal("light")),
       fontSize: v.number(),
       wordWrap: v.boolean(),
+      // Auto-Save is on by default and stored per workspace. Optional so
+      // workspaces created before the setting existed keep working; a saved
+      // explicit choice is never overwritten on load.
+      autoSave: v.optional(v.boolean()),
     })
       .index("by_user", ["userId"])
       .index("by_expiry", ["expiresAt"]),

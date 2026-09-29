@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronRight,
   ChevronDown,
@@ -42,6 +42,7 @@ import {
   type FileMeta,
   type TreeNode,
 } from "@/lib/fileTree";
+import { consumeFileDialog, subscribeFileDialogs } from "@/lib/fileActionBus";
 
 type Props = {
   files: FileMeta[];
@@ -101,6 +102,32 @@ export function FileExplorer({
   const [deleting, setDeleting] = useState<{ path: string; isFolder: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Dialogs requested from elsewhere (the command palette) arrive through a
+  // small channel, so this works for the desktop panel and the mobile drawer
+  // alike — whichever one happens to be mounted.
+  const filesRef = useRef(files);
+  filesRef.current = files;
+  useEffect(
+    () =>
+      subscribeFileDialogs((request) => {
+        const { kind, path } = request;
+        const isFolder = filesRef.current.find((f) => f.path === path)?.isFolder ?? false;
+        setError(null);
+        if (kind === "rename") {
+          setRenaming({ path, isFolder, name: path.split("/").pop() ?? path });
+        } else if (kind === "move") {
+          const dest = path.includes("/")
+            ? path.slice(0, path.lastIndexOf("/") + 1).replace(/\/$/, "")
+            : "";
+          setMoving({ path, isFolder, dest });
+        } else {
+          setDeleting({ path, isFolder });
+        }
+        consumeFileDialog(request.token);
+      }),
+    [],
+  );
 
   const tree = useMemo(() => buildTree(files), [files]);
 
@@ -212,7 +239,7 @@ export function FileExplorer({
 
     const row = (
       <div
-        className={`group flex h-7 cursor-pointer items-center gap-1.5 rounded-md pr-2 text-[13px] ${
+        className={`group flex h-9 cursor-pointer items-center gap-1.5 rounded-md pr-2 text-[13px] md:h-7 ${
           isActive ? "bg-sky-500/15 text-sky-700 dark:text-sky-200" : "text-foreground/80 hover:bg-foreground/5"
         }`}
         style={{ paddingLeft: 6 + depth * 12 }}
@@ -294,13 +321,13 @@ export function FileExplorer({
 
   return (
     <div className="flex h-full flex-col bg-background">
-      <div className="flex h-9 shrink-0 items-center gap-1 border-b border-border/60 px-2">
+      <div className="flex h-11 shrink-0 items-center gap-1 border-b border-border/60 px-2 md:h-9">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Explorer</span>
         <div className="ml-auto flex items-center gap-0.5">
-          <Button variant="ghost" size="sm" className="size-7 p-0 text-muted-foreground" title="New file" onClick={() => onCreate(null, false)}>
+          <Button variant="ghost" size="sm" className="size-8 p-0 text-muted-foreground md:size-7" title="New file" onClick={() => onCreate(null, false)}>
             <Plus className="size-4" />
           </Button>
-          <Button variant="ghost" size="sm" className="size-7 p-0 text-muted-foreground" title="New folder" onClick={() => onCreate(null, true)}>
+          <Button variant="ghost" size="sm" className="size-8 p-0 text-muted-foreground md:size-7" title="New folder" onClick={() => onCreate(null, true)}>
             <FolderPlusIcon />
           </Button>
         </div>
@@ -313,7 +340,7 @@ export function FileExplorer({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search files…"
-              className="h-7 border-border/60 bg-white/[0.03] pl-7 text-xs"
+              className="h-9 border-border/60 bg-white/[0.03] pl-7 text-xs md:h-7"
             />
           </div>
         </div>

@@ -72,6 +72,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   CommandDialog,
   CommandInput,
@@ -93,6 +94,14 @@ import {
 import { runManager, type RunState } from "@/lib/runOrchestrator";
 import { buildPreviewHtml, type PreviewFiles } from "@/lib/previewBuilder";
 import { fileIconMeta } from "@/lib/fileTree";
+import {
+  loadRunHistory,
+  pushRunHistory,
+  saveRunHistory,
+  type RunHistoryEntry,
+  type RunHistoryState,
+} from "@/lib/runHistory";
+import { requestFileDialog } from "@/lib/fileActionBus";
 import { startPyodideWarmup, subscribePyodideWarmup } from "@/lib/pyodideRunner";
 import { warmEsbuild } from "@/lib/tsRunner";
 import { formatBytesClient } from "@/lib/clientHelpers";
@@ -100,6 +109,10 @@ import { sessionIdFromAuthToken, storeGuestContext } from "@/lib/guestContext";
 import { useAuthToken } from "@convex-dev/auth/react";
 
 const RUNNABLE_LANGS: LangId[] = ["python", "javascript", "typescript", "c", "cpp", "java", "bash", "sql"];
+
+// Auto-Save settles this long after the last keystroke, so typing never issues
+// a write per character.
+const AUTOSAVE_DELAY_MS = 1200;
 
 export default function Ide() {
   const { projectId: projectIdParam } = useParams();
@@ -165,6 +178,8 @@ export default function Ide() {
   const [pyodideState, setPyodideState] = useState<string>("idle");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [autoSaving, setAutoSaving] = useState(false);
+  const [runHistory, setRunHistory] = useState<RunHistoryEntry[]>([]);
   // Action waiting on the unsaved-changes confirmation (closing a dirty tab,
   // or leaving the project while edits are pending).
   const [unsavedPrompt, setUnsavedPrompt] = useState<
@@ -172,11 +187,54 @@ export default function Ide() {
   >(null);
   const [unsavedBusy, setUnsavedBusy] = useState(false);
   const lineIdRef = useRef(0);
+  // Latest values for callbacks that must stay stable across keystrokes
+  // (auto-save, run bookkeeping).
+  const tabsRef = useRef(tabs);
+  tabsRef.current = tabs;
+  const projectIdRef = useRef(projectId);
+  projectIdRef.current = projectId;
+  const runHistoryRef = useRef<RunHistoryEntry[]>([]);
+  const runContextRef = useRef<{ path: string; lang: LangId; startedAt: number } | null>(null);
+  const lastExitCodeRef = useRef(0);
+  const autoSaveInFlight = useRef(false);
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
     window.setTimeout(() => setToast(null), 3200);
   }, []);
+
+  // ---- Run history (local only) ----
+  // A short log of recent runs so the terminal can answer "what did I just
+  // run?". No backend, no telemetry — see lib/runHistory.
+  const recordRun = useCallback((state: RunHistoryState, exitCode: number) => {
+    const ctx = runContextRef.current;
+    if (!ctx) return;
+    // Cleared immediately so a second terminal-state callback can't duplicate.
+    runContextRef.current = null;
+    const entry: RunHistoryEntry = {
+      id: `${ctx.startedAt}-${ctx.path}`,
+      path: ctx.path,
+      lang: LANGUAGES[ctx.lang]?.label ?? ctx.lang,
+      state,
+      exitCode,
+      durationMs: Math.round(performance.now() - ctx.startedAt),
+      ts: Date.now(),
+    };
+    const next = pushRunHistory(runHistoryRef.current, entry);
+    runHistoryRef.current = next;
+    setRunHistory(next);
+    saveRunHistory(projectIdRef.current, next);
+  }, []);
+
+  const historyLoadedFor = useRef<string | null>(null);
+  useEffect(() => {
+    const id = project?._id;
+    if (!id || historyLoadedFor.current === id) return;
+    historyLoadedFor.current = id;
+    const stored = loadRunHistory(id);
+    runHistoryRef.current = stored;
+    setRunHistory(stored);
+  }, [project?._id]);
 
   // ---- Warm runtimes ----
   useEffect(() => {
@@ -399,16 +457,64 @@ export default function Ide() {
     [tabs],
   );
 
+  /** Mark only the files that were actually persisted as clean, so a partial
+   *  failure can never silently discard a draft. */
+  const applySavedContents = useCallback(
+    (saved: Array<{ path: string; content: string }>) => {
+      setTabs((prev) =>
+        prev.map((t) => {
+          const match = saved.find((s) => s.path === t.path);
+          return match ? { ...t, content: match.content } : t;
+        }),
+      );
+    },
+    [],
+  );
+
   // ---- Unsaved-changes protection ----
-  // Saving is always explicit (Ctrl+S / the Save button): this only makes
-  // sure an action that would throw drafts away asks first, and asks only
-  // when there is actually something unsaved.
+  // Manual saving stays explicit (Ctrl+S / the Save button); this also backs
+  // Auto-Save and the "action would throw drafts away" confirmation.
   const saveAllDirty = useCallback(async () => {
-    for (const t of tabs.filter((x) => x.draft !== x.content)) {
+    const dirty = tabsRef.current.filter((x) => x.draft !== x.content);
+    if (dirty.length === 0) return;
+    for (const t of dirty) {
       await saveFile({ projectId, path: t.path, content: t.draft });
     }
-    setTabs((prev) => prev.map((t) => ({ ...t, content: t.draft })));
-  }, [tabs, projectId, saveFile]);
+    applySavedContents(dirty.map((t) => ({ path: t.path, content: t.draft })));
+    touchWs().catch(() => undefined);
+  }, [projectId, saveFile, touchWs, applySavedContents]);
+
+  // ---- Auto-Save ----
+  // On by default for every workspace (see convex/workspaces.ts); the saved
+  // per-workspace preference is honoured, so turning it off sticks. Writes go
+  // through the same `files.save` mutation manual Save uses — no second
+  // persistence path — debounced and skipped while a save is in flight.
+  const autoSaveEnabled = workspace?.autoSave ?? true;
+  useEffect(() => {
+    if (!autoSaveEnabled) return;
+    if (dirtyPaths.size === 0) return;
+    let timer = 0;
+    const attempt = () => {
+      // A save is already running: try again shortly rather than dropping the
+      // pending edits (they are read fresh when the retry fires).
+      if (autoSaveInFlight.current) {
+        timer = window.setTimeout(attempt, 400);
+        return;
+      }
+      autoSaveInFlight.current = true;
+      setAutoSaving(true);
+      void saveAllDirty()
+        .catch((e) =>
+          showToast(e instanceof Error ? e.message : "Auto-save failed — use Save to retry."),
+        )
+        .finally(() => {
+          autoSaveInFlight.current = false;
+          setAutoSaving(false);
+        });
+    };
+    timer = window.setTimeout(attempt, AUTOSAVE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [autoSaveEnabled, dirtyPaths, saveAllDirty, showToast]);
 
   const leaveProject = useCallback(() => {
     if (dirtyPaths.size > 0) {
@@ -507,21 +613,31 @@ export default function Ide() {
 
   const runCallbacks = useMemo<Parameters<typeof runManager.runSingleFile>[1]>(
     () => ({
-      onState: (s) => setRunState(s),
+      onState: (s) => {
+        setRunState(s);
+        // Terminal states are recorded in Run History; "starting"/"running"
+        // are not. The orchestrator calls onExit first, so the exit code the
+        // history entry reports is the real one.
+        if (s === "success" || s === "failed" || s === "stopped") {
+          recordRun(s, lastExitCodeRef.current);
+        }
+      },
       onStdout: (text) =>
         setTerminalLines((prev) => [...prev.slice(-400), { id: ++lineIdRef.current, kind: "stdout", text, ts: Date.now() }]),
       onStderr: (text) =>
         setTerminalLines((prev) => [...prev.slice(-400), { id: ++lineIdRef.current, kind: "stderr", text, ts: Date.now() }]),
       onInfo: (text) =>
         setTerminalLines((prev) => [...prev.slice(-400), { id: ++lineIdRef.current, kind: "info", text, ts: Date.now() }]),
-      onExit: (code) =>
+      onExit: (code) => {
+        lastExitCodeRef.current = code;
         setTerminalLines((prev) => [
           ...prev.slice(-400),
           { id: ++lineIdRef.current, kind: "exit", text: `\nProcess finished with exit code ${code}`, ts: Date.now() },
-        ]),
+        ]);
+      },
       onPreview: () => undefined,
     }),
-    [],
+    [recordRun],
   );
 
   useEffect(() => {
@@ -563,6 +679,7 @@ export default function Ide() {
         showToast("No .html entry file — add an HTML file to get a live preview.");
         return;
       }
+      runContextRef.current = { path: activePath, lang, startedAt: performance.now() };
       // Save all dirty tabs first so preview reflects real saved content
       for (const t of tabs.filter((x) => x.draft !== x.content)) {
         await saveFile({ projectId, path: t.path, content: t.draft }).catch(() => undefined);
@@ -578,6 +695,7 @@ export default function Ide() {
       // behind the editor. Bring the same preview panel forward there too.
       if (isNarrow) setMobilePanel("preview");
       setRunState("success");
+      recordRun("success", 0);
       setTerminalLines((prev) => [
         ...prev.slice(-400),
         { id: ++lineIdRef.current, kind: "info", text: `— preview ${project?.entryFile ?? "index.html"} · live sandboxed preview started —`, ts: Date.now() },
@@ -615,11 +733,13 @@ export default function Ide() {
       { id: ++lineIdRef.current, kind: "cmd", text: `$ run ${activePath}`, ts: Date.now() },
     ]);
     setLastRunTarget(activePath);
+    // Started here, finished in runCallbacks → recorded in Run History.
+    runContextRef.current = { path: activePath, lang, startedAt: performance.now() };
     await runManager.runSingleFile(
       { projectId, path: activePath, content: activeTab.draft, lang },
       runCallbacks,
     );
-  }, [activePath, activeTab, tabs, project?.entryFile, hasWebPreview, projectId, saveFile, runCallbacks, showToast, isNarrow]);
+  }, [activePath, activeTab, tabs, project?.entryFile, hasWebPreview, projectId, saveFile, runCallbacks, recordRun, showToast, isNarrow]);
 
   const handleRunRef = useRef(handleRun);
   handleRunRef.current = handleRun;
@@ -639,6 +759,24 @@ export default function Ide() {
       window.setTimeout(() => handleRunRef.current?.(), 50);
     }
   }, [lastRunTarget]);
+
+  /** Clear is a reset: output goes away and, when nothing is in flight, the
+   *  terminal returns to its idle badge. */
+  const handleClearTerminal = useCallback(() => {
+    setTerminalLines([]);
+    setRunState((prev) =>
+      prev === "running" || prev === "starting" ? prev : "idle",
+    );
+  }, []);
+
+  /** Jump from a Run History entry back to the file it ran. */
+  const handleOpenHistoryFile = useCallback(
+    (path: string) => {
+      openFile(path);
+      if (isNarrow) setMobilePanel("editor");
+    },
+    [openFile, isNarrow],
+  );
 
   // ---- File operations ----
   const handleCreate = useCallback(
@@ -740,6 +878,37 @@ export default function Ide() {
     [projectId, duplicateFile, showToast],
   );
 
+  /** Ask the explorer to open its rename/delete dialog for a path. Used by
+   *  the command palette so those actions reuse the explorer's own dialogs
+   *  (and its validation) instead of duplicating them. */
+  const requestFileAction = useCallback(
+    (kind: "rename" | "delete", path: string) => {
+      // Make sure an explorer is mounted to pick the request up: panel on
+      // desktop, drawer on mobile.
+      setExplorerOpen(true);
+      if (isNarrow) setExplorerDrawerOpen(true);
+      requestFileDialog(kind, path);
+    },
+    [isNarrow],
+  );
+
+  const handleSaveAll = useCallback(async () => {
+    const count = tabsRef.current.filter((t) => t.draft !== t.content).length;
+    if (count === 0) {
+      showToast("Nothing to save — everything is up to date.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await saveAllDirty();
+      showToast(`Saved ${count} file${count === 1 ? "" : "s"}`);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Save all failed");
+    } finally {
+      setSaving(false);
+    }
+  }, [saveAllDirty, showToast]);
+
   const handleDownloadFile = useCallback(
     async (path: string) => {
       try {
@@ -807,13 +976,27 @@ export default function Ide() {
         run: () => openFile(f.path),
       });
     }
+    items.push({
+      id: "saveall",
+      label: "Save all files",
+      hint: dirtyPaths.size > 0 ? `${dirtyPaths.size} unsaved` : undefined,
+      group: "Actions",
+      run: () => void handleSaveAll(),
+    });
     if (activePath) {
       items.push({ id: "save", label: "Save current file", hint: "Ctrl+S", group: "Actions", run: saveActive });
       items.push({ id: "run", label: `Run ${activePath}`, hint: "Ctrl+Enter", group: "Actions", run: () => handleRunRef.current?.() });
+      items.push({ id: "closefile", label: `Close ${activePath}`, group: "Actions", run: () => requestCloseTab(activePath) });
+      items.push({ id: "dupfile", label: `Duplicate file: ${activePath}`, group: "Actions", run: () => void handleDuplicate(activePath) });
+      items.push({ id: "renfile", label: "Rename current file…", group: "Actions", run: () => requestFileAction("rename", activePath) });
+      items.push({ id: "delfile", label: "Delete current file…", group: "Actions", run: () => requestFileAction("delete", activePath) });
+    }
+    if (runState === "running" || runState === "starting") {
+      items.push({ id: "stop", label: "Stop the running process", group: "Actions", run: handleStop });
     }
     items.push(
-      { id: "newfile", label: "New file", group: "Actions", run: () => setNewFileDialog({ isFolder: false }) },
-      { id: "newfolder", label: "New folder", group: "Actions", run: () => setNewFileDialog({ isFolder: true }) },
+      { id: "newfile", label: "New file", group: "Actions", run: () => handleCreate(null, false) },
+      { id: "newfolder", label: "New folder", group: "Actions", run: () => handleCreate(null, true) },
       { id: "preview", label: "Toggle preview panel", group: "View", run: () => setPreviewOpen((v) => !v) },
       { id: "terminal", label: "Toggle terminal panel", group: "View", run: () => setTerminalOpen((v) => !v) },
       { id: "explorer", label: "Toggle explorer", hint: "Ctrl+B", group: "View", run: () => setExplorerOpen((v) => !v) },
@@ -823,11 +1006,37 @@ export default function Ide() {
         group: "View",
         run: toggleAppTheme,
       },
+      { id: "settings", label: "Editor settings", group: "View", run: () => setSettingsOpen(true) },
+      {
+        id: "autosave",
+        label: autoSaveEnabled ? "Turn Auto Save off" : "Turn Auto Save on",
+        group: "View",
+        run: () => updateEditorSettings({ autoSave: !autoSaveEnabled }).catch(() => undefined),
+      },
       { id: "export", label: "Export project as ZIP", group: "Project", run: () => handleExport() },
       { id: "back", label: "Back to dashboard", group: "Project", run: leaveProject },
     );
     return items;
-  }, [textFiles, openFile, saveActive, activePath, handleExport, leaveProject, theme, toggleAppTheme]);
+  }, [
+    textFiles,
+    openFile,
+    saveActive,
+    activePath,
+    handleExport,
+    leaveProject,
+    theme,
+    toggleAppTheme,
+    dirtyPaths.size,
+    handleSaveAll,
+    runState,
+    handleStop,
+    requestCloseTab,
+    handleDuplicate,
+    requestFileAction,
+    handleCreate,
+    autoSaveEnabled,
+    updateEditorSettings,
+  ]);
 
   // ---- Workspace expiry watch ----
   const workspaceExpired = workspace?.expiredNow ?? false;
@@ -887,39 +1096,47 @@ export default function Ide() {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
       {/* Title bar */}
-      <header className="flex h-11 shrink-0 items-center gap-1.5 border-b border-border/60 bg-background px-2 sm:px-3">
-        <Button variant="ghost" size="sm" className="h-7 gap-1.5 px-2 text-muted-foreground" onClick={leaveProject}>
+      <header className="flex h-12 shrink-0 items-center gap-1.5 border-b border-border/60 bg-background px-2 sm:px-3 md:h-11">
+        <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-muted-foreground md:h-7" onClick={leaveProject}>
           <ArrowLeft className="size-4" />
           <span className="hidden sm:inline">Projects</span>
         </Button>
         <div className="mx-0.5 h-4 w-px shrink-0 bg-border/60" />
         <span className="min-w-0 truncate text-sm font-medium">{project.name}</span>
         <Badge variant="secondary" className="hidden shrink-0 text-[10px] sm:inline-flex">{project.language}</Badge>
-        {saving && <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />}
+        {(saving || autoSaving) && (
+          <span
+            className="flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground"
+            title={autoSaving ? "Auto-saving your changes" : "Saving"}
+          >
+            <Loader2 className="size-3.5 animate-spin" />
+            <span className="hidden sm:inline">{autoSaving ? "Auto-saving…" : "Saving…"}</span>
+          </span>
+        )}
 
         <div className="ml-auto flex shrink-0 items-center gap-1">
           {/* RUN button — always accessible */}
           {runState === "running" || runState === "starting" ? (
-            <Button size="sm" className="h-7 gap-1.5 bg-red-500/90 px-3 text-white hover:bg-red-500" onClick={handleStop}>
+            <Button size="sm" className="h-8 gap-1.5 bg-red-500/90 px-3 text-white hover:bg-red-500 md:h-7" onClick={handleStop}>
               <Square className="size-3.5" /> Stop
             </Button>
           ) : (
-            <Button size="sm" className="h-7 gap-1.5 bg-emerald-600 px-3 text-white hover:bg-emerald-500" onClick={() => handleRunRef.current?.()}>
+            <Button size="sm" className="h-8 gap-1.5 bg-emerald-600 px-3 text-white hover:bg-emerald-500 md:h-7" onClick={() => handleRunRef.current?.()}>
               <Play className="size-3.5 fill-current" /> Run
             </Button>
           )}
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={saveActive} title="Save (Ctrl+S)">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground md:h-7 md:w-7" onClick={saveActive} title="Save (Ctrl+S)">
             <Save className="size-4" />
           </Button>
 
           {/* Primary actions — always visible on mobile */}
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground md:hidden" onClick={() => setExplorerDrawerOpen(true)} title="Files">
+          <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground md:hidden" onClick={() => setExplorerDrawerOpen(true)} title="Files">
             <Menu className="size-4" />
           </Button>
           <Button
             variant="ghost"
             size="sm"
-            className={`h-7 w-7 p-0 md:hidden ${mobilePanel === "terminal" ? "text-sky-500" : "text-muted-foreground"}`}
+            className={`h-8 w-8 p-0 md:hidden ${mobilePanel === "terminal" ? "text-sky-500" : "text-muted-foreground"}`}
             onClick={() => setMobilePanel("terminal")}
             title="Terminal"
           >
@@ -929,7 +1146,7 @@ export default function Ide() {
             <Button
               variant="ghost"
               size="sm"
-              className={`h-7 w-7 p-0 md:hidden ${mobilePanel === "preview" ? "text-sky-500" : "text-muted-foreground"}`}
+              className={`h-8 w-8 p-0 md:hidden ${mobilePanel === "preview" ? "text-sky-500" : "text-muted-foreground"}`}
               onClick={() => setMobilePanel("preview")}
               title="Preview"
             >
@@ -952,7 +1169,7 @@ export default function Ide() {
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" title="More">
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground md:h-7 md:w-7" title="More">
                 <MoreHorizontal className="size-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -968,22 +1185,19 @@ export default function Ide() {
                   {exporting ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : <Download className="mr-2 size-3.5" />} Export ZIP
                 </DropdownMenuItem>
               </div>
-              <div className="hidden md:block">
-                <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
-                  <Palette className="mr-2 size-3.5" /> Editor settings
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setCommandOpen(true)}>
-                  <Command className="mr-2 size-3.5" /> Command palette
-                </DropdownMenuItem>
-              </div>
-              <div className="md:hidden">
-                <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
-                  <Palette className="mr-2 size-3.5" /> Editor settings
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setCommandOpen(true)}>
-                  <Command className="mr-2 size-3.5" /> Command palette
-                </DropdownMenuItem>
-              </div>
+              <DropdownMenuItem onClick={() => setSettingsOpen(true)}>
+                <Palette className="mr-2 size-3.5" /> Editor settings
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() =>
+                  updateEditorSettings({ autoSave: !autoSaveEnabled }).catch(() => undefined)
+                }
+              >
+                <Save className="mr-2 size-3.5" /> Auto Save: {autoSaveEnabled ? "On" : "Off"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCommandOpen(true)}>
+                <Command className="mr-2 size-3.5" /> Command palette
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           <div className="hidden sm:block">
@@ -999,7 +1213,7 @@ export default function Ide() {
           <div className="flex h-full min-h-0 flex-col">
             {mobilePanel === "editor" && (
               <>
-                <div className="flex h-9 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border/60 bg-background px-1">
+                <div className="flex h-10 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border/60 bg-background px-1 md:h-9">
                   {tabs.length === 0 && (
                     <span className="px-3 text-xs text-muted-foreground/70">No open files</span>
                   )}
@@ -1009,7 +1223,7 @@ export default function Ide() {
                     return (
                       <div
                         key={t.path}
-                        className={`group flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-t-md border-b-2 px-2.5 text-xs ${
+                        className={`group flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-t-md border-b-2 px-2.5 text-xs md:h-7 ${
                           activePath === t.path
                             ? "border-sky-500 bg-foreground/5 text-foreground"
                             : "border-transparent text-muted-foreground hover:text-foreground/80"
@@ -1022,7 +1236,7 @@ export default function Ide() {
                         <span className="max-w-[110px] truncate">{t.path.split("/").pop()}</span>
                         {dirty && <span className="text-amber-500 dark:text-amber-400">●</span>}
                         <button
-                          className="ml-1 rounded p-0.5 hover:bg-foreground/10"
+                          className="ml-1 rounded p-1 hover:bg-foreground/10 md:p-0.5"
                           onClick={(e) => {
                             e.stopPropagation();
                             requestCloseTab(t.path);
@@ -1055,6 +1269,13 @@ export default function Ide() {
                       onWordWrapToggle={() =>
                         updateEditorSettings({ wordWrap: !(workspace?.wordWrap ?? false) })
                       }
+                      compact={isNarrow}
+                      autoSave={autoSaveEnabled}
+                      onAutoSaveToggle={() =>
+                        updateEditorSettings({ autoSave: !autoSaveEnabled }).catch(
+                          () => undefined,
+                        )
+                      }
                     />
                   ) : allFiles.length === 0 ? (
                     <EmptyProjectState onCreateFile={() => setNewFileDialog({ isFolder: false })} />
@@ -1072,10 +1293,12 @@ export default function Ide() {
                 <TerminalPanel
                   lines={terminalLines}
                   runState={runState}
-                  onClear={() => setTerminalLines([])}
+                  history={runHistory}
+                  onClear={handleClearTerminal}
                   onStop={handleStop}
                   onRerun={handleRerun}
                   canRerun={lastRunTarget !== null}
+                  onOpenHistoryFile={handleOpenHistoryFile}
                   onClose={() => setMobilePanel("editor")}
                 />
               </div>
@@ -1120,7 +1343,7 @@ export default function Ide() {
                 <Panel defaultSize={65} minSize={25}>
                   <div className="flex h-full min-h-0 flex-col">
                     {/* Tabs */}
-                    <div className="flex h-9 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border/60 bg-background px-1">
+                    <div className="flex h-10 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border/60 bg-background px-1 md:h-9">
                     {tabs.length === 0 && (
                       <span className="px-3 text-xs text-muted-foreground/70">No open files — pick one from the explorer</span>
                     )}
@@ -1130,7 +1353,7 @@ export default function Ide() {
                       return (
                         <div
                           key={t.path}
-                          className={`group flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-t-md border-b-2 px-2.5 text-xs ${
+                          className={`group flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-t-md border-b-2 px-2.5 text-xs md:h-7 ${
                             activePath === t.path
                               ? "border-sky-500 bg-foreground/5 text-foreground"
                               : "border-transparent text-muted-foreground hover:text-foreground/80"
@@ -1180,6 +1403,12 @@ export default function Ide() {
                             onWordWrapToggle={() =>
                               updateEditorSettings({ wordWrap: !(workspace?.wordWrap ?? false) })
                             }
+                            autoSave={autoSaveEnabled}
+                            onAutoSaveToggle={() =>
+                              updateEditorSettings({ autoSave: !autoSaveEnabled }).catch(
+                                () => undefined,
+                              )
+                            }
                           />
                         ) : allFiles.length === 0 ? (
                           <EmptyProjectState onCreateFile={() => setNewFileDialog({ isFolder: false })} />
@@ -1215,10 +1444,12 @@ export default function Ide() {
                     <TerminalPanel
                       lines={terminalLines}
                       runState={runState}
-                      onClear={() => setTerminalLines([])}
+                      history={runHistory}
+                      onClear={handleClearTerminal}
                       onStop={handleStop}
                       onRerun={handleRerun}
                       canRerun={lastRunTarget !== null}
+                      onOpenHistoryFile={handleOpenHistoryFile}
                       onClose={() => setTerminalOpen(false)}
                     />
                   </Panel>

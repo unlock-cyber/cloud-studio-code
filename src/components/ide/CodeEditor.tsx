@@ -12,7 +12,7 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { load as yamlLoad } from "js-yaml";
 import { Button } from "@/components/ui/button";
-import { WrapText, Minus, Plus, Sun, Moon } from "lucide-react";
+import { WrapText, Minus, Plus, Sun, Moon, Save } from "lucide-react";
 
 export type EditorTab = {
   path: string;
@@ -31,6 +31,11 @@ type Props = {
   wordWrap: boolean;
   onFontSizeChange: (size: number) => void;
   onWordWrapToggle: () => void;
+  /** Narrow-screen mode: drops the minimap, which would eat the editing area. */
+  compact?: boolean;
+  /** Current Auto Save preference, shown as a toggle in the editor toolbar. */
+  autoSave?: boolean;
+  onAutoSaveToggle?: () => void;
 };
 
 export function CodeEditor({
@@ -44,6 +49,9 @@ export function CodeEditor({
   wordWrap,
   onFontSizeChange,
   onWordWrapToggle,
+  compact = false,
+  autoSave = false,
+  onAutoSaveToggle,
 }: Props) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const saveRef = useRef(onSave);
@@ -213,6 +221,22 @@ export function CodeEditor({
           <span className="hidden sm:inline">{lang.toUpperCase()}</span>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-1">
+          {onAutoSaveToggle && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className={`h-7 gap-1 px-2 text-xs ${autoSave ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}
+              onClick={onAutoSaveToggle}
+              title={
+                autoSave
+                  ? "Auto Save is on — click to turn it off"
+                  : "Auto Save is off — click to turn it on"
+              }
+            >
+              <Save className="size-3.5" />
+              <span className="hidden sm:inline">Auto</span>
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -227,8 +251,10 @@ export function CodeEditor({
             size="sm"
             className={`h-7 gap-1 px-2 text-xs ${wordWrap ? "text-sky-600 dark:text-sky-400" : "text-muted-foreground"}`}
             onClick={onWordWrapToggle}
+            title="Toggle word wrap"
           >
-            <WrapText className="size-3.5" /> Wrap
+            <WrapText className="size-3.5" />
+            <span className="hidden sm:inline">Wrap</span>
           </Button>
           <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground" onClick={() => onFontSizeChange(fontSize - 1)}>
             <Minus className="size-3.5" />
@@ -250,7 +276,7 @@ export function CodeEditor({
           options={{
             fontSize,
             wordWrap: wordWrap ? "on" : "off",
-            minimap: { enabled: true, scale: 1 },
+            minimap: { enabled: !compact, scale: 1 },
             scrollBeyondLastLine: false,
             automaticLayout: true,
             tabSize: 2,
