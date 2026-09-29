@@ -11,7 +11,11 @@ export type ChangelogEntry = {
   title: string;
   /** ISO date (YYYY-MM-DD). Drives ordering; the display date is derived. */
   date: string;
-  /** Short label shown on the index card and the post header. */
+  /**
+   * Semantic category shown on the index card and the post header, e.g.
+   * "New Feature". Stored in sentence case and rendered in caps, so entries
+   * stay readable here while every label reads consistently on the page.
+   */
   badge: string;
   /** Link label on the index card. */
   cta: string;
@@ -20,21 +24,21 @@ export type ChangelogEntry = {
 const CHANGELOG: ChangelogEntry[] = [
   {
     path: "/changelog/collaboration-update",
-    title: "Update 3: Project Sharing & Collaboration",
+    title: "Project Sharing & Collaboration",
     date: "2026-09-29",
-    badge: "Update 3",
+    badge: "New Feature",
     cta: "Read the update",
   },
   {
     path: "/changelog/ide-developer-ux-update",
-    title: "Update 2: Mobile & Developer UX",
+    title: "Mobile & Developer UX",
     date: "2026-09-29",
-    badge: "Update 2",
+    badge: "Enhancement",
     cta: "Read the update",
   },
   {
     path: "/changelog/ide-polish-update",
-    title: "IDE Polish Update",
+    title: "IDE Polish",
     date: "2026-09-28",
     badge: "Enhancement",
     cta: "Read the update",
@@ -50,7 +54,7 @@ const CHANGELOG: ChangelogEntry[] = [
     path: "/changelog/introducing-cloud-studio-code",
     title: "Introducing Cloud Studio Code",
     date: "2026-09-20",
-    badge: "Initial release",
+    badge: "Initial Release",
     cta: "Read the announcement",
   },
 ];

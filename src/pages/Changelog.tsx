@@ -58,7 +58,7 @@ export default function Changelog() {
             >
               <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
                 <Sparkles className="size-3.5" />
-                {entry.badge}
+                <span className="uppercase">{entry.badge}</span>
               </div>
               <h2 className="mt-2 text-xl font-bold tracking-tight text-foreground transition-colors group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
                 {entry.title}

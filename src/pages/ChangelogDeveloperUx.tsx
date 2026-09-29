@@ -19,9 +19,9 @@ export default function ChangelogDeveloperUx() {
     else navigate("/changelog", { replace: true });
   };
   usePageMeta({
-    title: "Update 2: Mobile & Developer UX — Changelog",
+    title: "Mobile & Developer UX — Changelog",
     description:
-      "Update 2 for Cloud Studio Code: Auto-Save on by default with clear per-workspace controls, a more comfortable IDE on phones, a deeper command palette, clearer terminal states and a lightweight recent run history.",
+      "Cloud Studio Code gets Auto-Save on by default with clear per-workspace controls, a more comfortable IDE on phones, a deeper command palette, clearer terminal states and a lightweight recent run history.",
     path: "/changelog/ide-developer-ux-update",
   });
 
@@ -46,10 +46,10 @@ export default function ChangelogDeveloperUx() {
           <div className="border-b border-border/60 pb-5">
             <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
               <Sparkles className="size-3.5" />
-              Update 2 · 29 September 2026
+              <span className="uppercase">Enhancement</span> · 29 September 2026
             </div>
             <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
-              Update 2: Mobile &amp; Developer UX
+              Mobile &amp; Developer UX
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
               This update focuses on the everyday rhythm of writing code in Cloud Studio

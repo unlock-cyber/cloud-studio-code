@@ -18,9 +18,9 @@ export default function ChangelogIdePolish() {
     else navigate("/changelog", { replace: true });
   };
   usePageMeta({
-    title: "IDE Polish Update — Changelog",
+    title: "IDE Polish — Changelog",
     description:
-      "Update 1 for Cloud Studio Code: recent projects, project rename and duplicate, a more capable file explorer, stronger protection for unsaved changes, and clearer loading, empty and error states.",
+      "Cloud Studio Code gets recent projects, project rename and duplicate, a more capable file explorer, stronger protection for unsaved changes, and clearer loading, empty and error states.",
     path: "/changelog/ide-polish-update",
   });
 
@@ -45,10 +45,10 @@ export default function ChangelogIdePolish() {
           <div className="border-b border-border/60 pb-5">
             <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
               <Sparkles className="size-3.5" />
-              Enhancement · 28 September 2026
+              <span className="uppercase">Enhancement</span> · 28 September 2026
             </div>
             <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">
-              IDE Polish Update
+              IDE Polish
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
               This update is all about making everyday work in the editor smoother and
