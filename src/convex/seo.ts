@@ -35,6 +35,9 @@ export const serveRobots = httpAction(async () => {
     "Disallow: /backstage",
     "Disallow: /dashboard",
     "Disallow: /ide/",
+    // Share links are unguessable bearer URLs; keep crawlers out of them even
+    // though the shared pages also send a noindex meta tag.
+    "Disallow: /s/",
     "Disallow: /auth",
     ...(origin ? [`Sitemap: ${origin}/sitemap.xml`] : []),
     "",

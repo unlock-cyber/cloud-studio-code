@@ -14,7 +14,7 @@
 import { v } from "convex/values";
 import { query, type QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { normalizePath } from "./projects";
+import { hasWebPreview, normalizePath } from "./projects";
 
 const MAX_TOKEN_LENGTH = 128;
 
@@ -62,6 +62,11 @@ async function resolveShared(
  * Project overview + file listing for a shared link. Metadata only — file
  * contents are fetched per file through `content`, so opening a link never
  * ships the whole project.
+ *
+ * `previewAvailable` is computed here so the viewer and the owner's share
+ * dialog agree on whether a live preview exists, and `updatedAt`/`fileCount`
+ * are project-level facts (never workspace metadata) that let a visitor see
+ * what they are looking at at a glance.
  */
 export const get = query({
   args: { token: v.string() },
@@ -78,6 +83,9 @@ export const get = query({
       name: project.name,
       language: project.language,
       entryFile: project.entryFile ?? null,
+      previewAvailable: hasWebPreview(project.entryFile, files.map((f) => f.path)),
+      fileCount: files.filter((f) => !f.isFolder).length,
+      updatedAt: files.reduce((latest, f) => Math.max(latest, f.updatedAt), 0),
       files: files.map((f) => ({
         path: f.path,
         name: f.name,

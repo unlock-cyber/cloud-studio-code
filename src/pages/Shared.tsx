@@ -22,12 +22,14 @@ import { CodeEditor } from "@/components/ide/CodeEditor";
 import { PreviewPanel, type PreviewMessage } from "@/components/ide/PreviewPanel";
 import { fileIconMeta, type FileMeta } from "@/lib/fileTree";
 import { buildPreviewHtml } from "@/lib/previewBuilder";
+import { formatRelativeTime } from "@/lib/clientHelpers";
 import { usePageMeta } from "@/lib/seo";
 import { useTheme } from "@/hooks/use-theme";
 import { useIsNarrowViewport } from "@/hooks/use-narrow-viewport";
 import {
   Eye,
   FileCode2,
+  FolderOpen,
   Globe,
   LayoutPanelLeft,
   Link2Off,
@@ -37,7 +39,9 @@ import {
   X,
 } from "lucide-react";
 
-const WEB_ENTRY = /\.html?$/i;
+/** A preview message with a stable key and a severity, so errors can be shown
+ *  as errors instead of blending into a wall of console text. */
+type PreviewLogLine = { id: number; level: "error" | "info"; text: string };
 
 /**
  * Public, read-only view of a shared project (/s/:token).
@@ -62,7 +66,8 @@ export default function Shared() {
   const [previewOpen, setPreviewOpen] = useState(false);
   // Mobile shows one panel at a time; the preview is the only "second" panel.
   const [mobilePreview, setMobilePreview] = useState(false);
-  const [previewLog, setPreviewLog] = useState<string[]>([]);
+  const [previewLog, setPreviewLog] = useState<PreviewLogLine[]>([]);
+  const previewLogId = useRef(0);
   const [viewFontSize, setViewFontSize] = useState(13);
   const [viewWordWrap, setViewWordWrap] = useState(false);
 
@@ -83,11 +88,11 @@ export default function Shared() {
     [project?.files],
   );
 
-  const previewAvailable = useMemo(() => {
-    if (!project) return false;
-    if (project.entryFile && WEB_ENTRY.test(project.entryFile)) return true;
-    return project.files.some((f) => !f.isFolder && WEB_ENTRY.test(f.path));
-  }, [project]);
+  // Preview availability comes from the server (api.shared.get) using the same
+  // rule as the owner's share dialog, so both surfaces always agree.
+  const previewAvailable = project?.previewAvailable ?? false;
+  const fileCount = project?.fileCount ?? 0;
+  const updatedAt = project?.updatedAt ?? 0;
 
   // Open the entry file (or the first text file) once the project resolves.
   const initialisedFor = useRef<string | null>(null);
@@ -126,16 +131,28 @@ export default function Shared() {
 
   const handlePreviewMessage = (msg: PreviewMessage) => {
     if (msg.type === "ready") return;
-    const text =
+    const entry: PreviewLogLine | null =
       msg.type === "error"
-        ? `${msg.message}${msg.line ? ` (line ${msg.line})` : ""}`
-        : msg.type === "console"
-          ? `[${msg.level}] ${msg.text}`
-          : msg.type === "asset-error"
-            ? `missing asset: ${msg.src}`
-            : "";
-    if (!text) return;
-    setPreviewLog((prev) => [...prev.slice(-4), text]);
+        ? {
+            id: ++previewLogId.current,
+            level: "error",
+            text: `Preview error: ${msg.message}${msg.line ? ` (line ${msg.line})` : ""}`,
+          }
+        : msg.type === "asset-error"
+          ? {
+              id: ++previewLogId.current,
+              level: "error",
+              text: `Missing asset: ${msg.src}`,
+            }
+          : msg.type === "console"
+            ? {
+                id: ++previewLogId.current,
+                level: msg.level === "error" ? "error" : "info",
+                text: `[${msg.level}] ${msg.text}`,
+              }
+            : null;
+    if (!entry) return;
+    setPreviewLog((prev) => [...prev.slice(-4), entry]);
   };
 
   const openFile = (path: string) => {
@@ -168,10 +185,14 @@ export default function Shared() {
   if (project === undefined) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-3 bg-background px-6 text-center">
-        <div className="flex items-center gap-3 text-muted-foreground">
-          <Loader2 className="size-5 animate-spin" />
+        <BrandMark size={28} />
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" />
           <span className="text-sm">Opening shared project…</span>
         </div>
+        <p className="max-w-xs text-xs text-muted-foreground/80">
+          Loading a read-only copy of a Cloud Studio Code project. No account needed.
+        </p>
       </div>
     );
   }
@@ -183,20 +204,40 @@ export default function Shared() {
           <Link2Off className="mx-auto size-7 text-muted-foreground/60" />
           <h1 className="mt-3 text-base font-semibold">This link isn&rsquo;t available</h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            The share link is invalid, or the owner has turned sharing off. If someone sent it to
+            The share link is invalid, or it has been revoked. Links stop working as soon as the
+            owner turns sharing off, and when the shared project is deleted. If someone sent it to
             you, ask them for a new one.
           </p>
           <Button asChild size="sm" className="mt-5 gap-1.5 bg-emerald-600 text-white hover:bg-emerald-500">
             <Link to="/">
-              <Play className="size-3.5 fill-current" /> Start your own project
+              <Play className="size-3.5 fill-current" /> Create your own project
             </Link>
           </Button>
+          <p className="mt-3 text-xs text-muted-foreground/80">
+            Cloud Studio Code is a browser IDE — nothing to install.
+          </p>
         </div>
       </div>
     );
   }
 
   const editorBody = (() => {
+    if (fileCount === 0) {
+      return (
+        <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+          <FolderOpen className="size-7 text-muted-foreground/40" />
+          <p className="text-sm font-medium text-foreground/80">This shared project is empty</p>
+          <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
+            The owner hasn&rsquo;t added any files yet, so there is nothing to browse or preview.
+          </p>
+          <Button asChild size="sm" variant="outline" className="mt-1 gap-1.5">
+            <Link to="/">
+              <Play className="size-3.5 fill-current" /> Create your own project
+            </Link>
+          </Button>
+        </div>
+      );
+    }
     if (!activePath) {
       return (
         <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
@@ -272,10 +313,26 @@ export default function Shared() {
         />
       </div>
       {previewLog.length > 0 && (
-        <div className="max-h-24 shrink-0 overflow-auto border-t border-border/60 bg-background px-3 py-1.5 font-mono text-[11px] leading-relaxed">
-          {previewLog.map((line, i) => (
-            <div key={i} className="whitespace-pre-wrap break-words text-muted-foreground">
-              {line}
+        <div className="max-h-28 shrink-0 overflow-auto border-t border-border/60 bg-background px-3 py-1.5">
+          <div className="flex items-center justify-between gap-2 pb-1">
+            <span className="text-[10px] font-semibold tracking-wider text-muted-foreground uppercase">
+              Preview output
+            </span>
+            <button
+              className="text-[10px] text-muted-foreground hover:text-foreground"
+              onClick={() => setPreviewLog([])}
+            >
+              Clear
+            </button>
+          </div>
+          {previewLog.map((line) => (
+            <div
+              key={line.id}
+              className={`font-mono text-[11px] leading-relaxed break-words whitespace-pre-wrap ${
+                line.level === "error" ? "text-destructive" : "text-muted-foreground"
+              }`}
+            >
+              {line.text}
             </div>
           ))}
         </div>
@@ -355,19 +412,21 @@ export default function Shared() {
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{project.name}</span>
         <Badge
           variant="outline"
-          className="h-6 shrink-0 gap-1 border-border/60 px-2 text-[10px] font-medium text-muted-foreground"
-          title="You can view this project, but not edit it"
+          className="h-6 shrink-0 gap-1 border-border/60 px-1.5 text-[10px] font-medium text-muted-foreground"
+          title="Shared read-only view — browse and preview, but not edit"
+          aria-label="Read-only shared view"
         >
           <Eye className="size-3" />
-          <span className="hidden sm:inline">Read-only</span>
+          Read-only
         </Badge>
         <ThemeToggle theme={theme} onToggle={toggleTheme} />
         <Button
           asChild
           size="sm"
           className="h-8 shrink-0 gap-1.5 bg-emerald-600 text-white hover:bg-emerald-500"
+          title="Open Cloud Studio Code to create your own project"
         >
-          <Link to="/">
+          <Link to="/" aria-label="Start coding in Cloud Studio Code">
             <Play className="size-3.5 fill-current" />
             <span className="hidden sm:inline">Start coding</span>
           </Link>
@@ -455,8 +514,10 @@ export default function Shared() {
         {activePath && (
           <span className="hidden min-w-0 truncate sm:inline">{activePath}</span>
         )}
-        <span className="ml-auto hidden truncate sm:inline">
+        <span className="ml-auto hidden min-w-0 truncate sm:inline">
           Shared project · {project.language}
+          {fileCount > 0 ? ` · ${fileCount} file${fileCount === 1 ? "" : "s"}` : ""}
+          {updatedAt > 0 ? ` · Updated ${formatRelativeTime(updatedAt)}` : ""}
         </span>
       </footer>
 

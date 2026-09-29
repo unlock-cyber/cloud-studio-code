@@ -394,6 +394,23 @@ function newShareToken(): string {
   );
 }
 
+const WEB_ENTRY = /\.html?$/i;
+
+/**
+ * Whether the shared view can build a live preview for a project.
+ *
+ * Exported so the owner's share dialog and the public `/s/:token` viewer
+ * describe exactly the same thing: the preview builder needs an HTML entry
+ * file (or any .html file) to render; other project types stay source-only.
+ */
+export function hasWebPreview(
+  entryFile: string | undefined,
+  paths: string[],
+): boolean {
+  if (entryFile && WEB_ENTRY.test(entryFile)) return true;
+  return paths.some((p) => WEB_ENTRY.test(p));
+}
+
 /**
  * Owner-only share state. The token is returned to the owner so the link can
  * be re-copied later; it is never exposed to anyone else (every other project
@@ -403,14 +420,27 @@ export const getShare = query({
   args: { projectId: v.id("projects") },
   handler: async (ctx, { projectId }) => {
     const ws = await peekActiveWorkspace(ctx);
-    if (!ws) return { enabled: false, token: null };
+    if (!ws) return { enabled: false, token: null, previewAvailable: false, fileCount: 0 };
     const project = await ctx.db.get(projectId);
     if (!project || project.workspaceId !== ws._id) {
       throw new Error("Project not found");
     }
+    // The dialog tells the owner what a visitor actually gets, so it needs the
+    // same facts the public viewer shows: how many files, and whether a live
+    // preview can be built. Both are derived server-side (the preview rule is
+    // shared with `shared.get`) rather than guessed on the client.
+    const files = await ctx.db
+      .query("files")
+      .withIndex("by_project", (q) => q.eq("projectId", projectId))
+      .collect();
     return {
       enabled: project.shareToken !== undefined,
       token: project.shareToken ?? null,
+      previewAvailable: hasWebPreview(
+        project.entryFile,
+        files.map((f) => f.path),
+      ),
+      fileCount: files.filter((f) => !f.isFolder).length,
     };
   },
 });
