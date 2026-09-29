@@ -16,7 +16,7 @@ export default function About() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-3xl items-center px-4">
+        <div className="csc-shell flex h-14 items-center">
           <Button
             variant="ghost"
             size="sm"
@@ -31,7 +31,7 @@ export default function About() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 pb-16">
+      <main className="csc-shell pb-16">
         <div className="pt-10 pb-8">
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
             About{" "}

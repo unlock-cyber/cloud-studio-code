@@ -113,6 +113,35 @@
   --sidebar-ring: #388BFD;
 }
 
+/*
+ * Shared page shell for the long-form and index pages (about, changelog and
+ * its articles, contributions, legal pages).
+ *
+ * Each of those pages used to repeat one literal `max-w-3xl` on both its
+ * sticky header and its body, which pinned the entire page — header included —
+ * to a phone-width column in the middle of a desktop screen, and let the two
+ * drift apart whenever one of them was edited. One class keeps them on the
+ * same measure and adds a desktop step-up: below `lg` nothing changes, so the
+ * phone layout and the readable line length stay exactly as they were.
+ */
+@layer components {
+  .csc-shell {
+    @apply mx-auto w-full max-w-3xl px-4;
+  }
+  @media (min-width: 64rem) {
+    /* lg → max-w-4xl */
+    .csc-shell {
+      max-width: 56rem;
+    }
+  }
+  @media (min-width: 80rem) {
+    /* xl → max-w-5xl */
+    .csc-shell {
+      max-width: 64rem;
+    }
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

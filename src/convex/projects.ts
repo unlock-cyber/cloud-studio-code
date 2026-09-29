@@ -87,9 +87,22 @@ export const list = query({
       .withIndex("by_workspace", (q) => q.eq("workspaceId", ws._id))
       .filter((q) => q.eq(q.field("status"), "active"))
       .collect();
-    return projects
-      .sort((a, b) => b.lastOpenedAt - a.lastOpenedAt)
-      .map((p) => ({
+    const rows = [];
+    for (const p of projects) {
+      // "Last modified" is derived from the files' own `updatedAt` (the
+      // freshest file write wins) rather than stored on the project, so the
+      // value can never drift from the files it describes — and projects with
+      // no files yet fall back to the moment they were last opened. The
+      // dashboard sorts on it; nothing else depends on it.
+      const files = await ctx.db
+        .query("files")
+        .withIndex("by_project", (q) => q.eq("projectId", p._id))
+        .collect();
+      let lastModifiedAt = p.lastOpenedAt;
+      for (const f of files) {
+        if (!f.isFolder && f.updatedAt > lastModifiedAt) lastModifiedAt = f.updatedAt;
+      }
+      rows.push({
         _id: p._id,
         name: p.name,
         template: p.template,
@@ -97,8 +110,13 @@ export const list = query({
         entryFile: p.entryFile ?? null,
         createdAt: p.createdAt,
         lastOpenedAt: p.lastOpenedAt,
+        lastModifiedAt,
         status: p.status,
-      }));
+      });
+    }
+    // Default order stays "recently opened": the dashboard applies the user's
+    // chosen sort on top, and every other consumer keeps the old behaviour.
+    return rows.sort((a, b) => b.lastOpenedAt - a.lastOpenedAt);
   },
 });
 

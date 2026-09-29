@@ -22,6 +22,9 @@ const ChangelogIdePolish = lazy(() => import("./pages/ChangelogIdePolish.tsx"));
 const ChangelogDeveloperUx = lazy(() => import("./pages/ChangelogDeveloperUx.tsx"));
 const ChangelogCollaboration = lazy(() => import("./pages/ChangelogCollaboration.tsx"));
 const ChangelogCollaboration20 = lazy(() => import("./pages/ChangelogCollaboration20.tsx"));
+const ChangelogWorkspaceProjectManagement = lazy(
+  () => import("./pages/ChangelogWorkspaceProjectManagement.tsx"),
+);
 const Contributions = lazy(() => import("./pages/Contributions.tsx"));
 const Shared = lazy(() => import("./pages/Shared.tsx"));
 const Backstage = lazy(() => import("./pages/Backstage.tsx"));
@@ -145,6 +148,10 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/changelog/ide-developer-ux-update" element={<ChangelogDeveloperUx />} />
               <Route path="/changelog/collaboration-update" element={<ChangelogCollaboration />} />
               <Route path="/changelog/collaboration-2-0" element={<ChangelogCollaboration20 />} />
+              <Route
+                path="/changelog/workspace-project-management"
+                element={<ChangelogWorkspaceProjectManagement />}
+              />
               <Route path="/contributions" element={<Contributions />} />
               {/* Public read-only view of a shared project — no auth required. */}
               <Route path="/s/:token" element={<Shared />} />

@@ -33,6 +33,15 @@ export type ChangelogEntry = {
 // missing metadata at runtime).
 const CHANGELOG = [
   {
+    path: "/changelog/workspace-project-management",
+    title: "Workspace & Project Management",
+    date: "2026-09-29",
+    badge: "Enhancement",
+    cta: "Read the update",
+    metaDescription:
+      "Cloud Studio Code project management gets search, ordering by recently opened, last modified, created or name, clearer recent-activity information, and safer create, rename and duplicate flows across the dashboard and the editor.",
+  },
+  {
     path: "/changelog/collaboration-2-0",
     title: "Collaboration 2.0",
     date: "2026-09-29",

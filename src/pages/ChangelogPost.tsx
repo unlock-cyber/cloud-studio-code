@@ -26,7 +26,7 @@ export default function ChangelogPost() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-3xl items-center px-4">
+        <div className="csc-shell flex h-14 items-center">
           <Button
             variant="ghost"
             size="sm"
@@ -38,7 +38,7 @@ export default function ChangelogPost() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-3xl px-4 pb-16">
+      <main className="csc-shell pb-16">
         <article className="mt-10 rounded-xl border border-border/60 bg-card p-5 sm:p-8">
           {/* Post header */}
           <div className="border-b border-border/60 pb-5">

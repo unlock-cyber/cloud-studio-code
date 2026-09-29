@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { useMutation, useQuery, useAction, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -50,10 +50,19 @@ import {
   TerminalSquare,
   AlertTriangle,
   Share2,
+  ArrowUpDown,
+  Check,
+  Search,
+  X,
 } from "lucide-react";
 import { ShareDialog } from "@/components/ide/ShareDialog";
 import { useAuth } from "@/hooks/use-auth";
-import { formatBytesClient, formatDate, formatRelativeTime } from "@/lib/clientHelpers";
+import {
+  formatBytesClient,
+  formatRelativeTime,
+  normalizeProjectName,
+  validateProjectNameClient,
+} from "@/lib/clientHelpers";
 import { usePageMeta } from "@/lib/seo";
 import { TEMPLATE_PICKER } from "@/lib/projectTemplates";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -63,21 +72,18 @@ import { useAuthToken } from "@convex-dev/auth/react";
 /** A project counts as "recent" while it was opened within this window. */
 const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const RECENT_LIMIT = 3;
-const MAX_PROJECT_NAME = 60;
+/**
+ * How the project list is ordered. Every option reads information the
+ * workspace already keeps — nothing is invented to look like activity.
+ */
+type SortKey = "recent" | "edited" | "created" | "name";
 
-/** Client-side mirror of the server's project-name rules, so the dialog can
- *  point at the problem before a round-trip. */
-function validateProjectNameClient(raw: string): string | null {
-  const name = raw.trim().replace(/\s+/g, " ");
-  if (!name) return "Enter a project name.";
-  if (name.length > MAX_PROJECT_NAME) {
-    return `Project names can be at most ${MAX_PROJECT_NAME} characters.`;
-  }
-  if (/[\\/:*?"<>|]/.test(name)) {
-    return 'Project names can\'t contain \\ / : * ? " < > |';
-  }
-  return null;
-}
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "recent", label: "Recently opened" },
+  { key: "edited", label: "Last modified" },
+  { key: "created", label: "Date created" },
+  { key: "name", label: "Name (A–Z)" },
+];
 
 const TEMPLATE_META_LABEL: Record<string, string> = {
   blank: "Blank",
@@ -130,6 +136,10 @@ export default function Dashboard() {
   const [shareTarget, setShareTarget] = useState<{ id: Id<"projects">; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortKey>("recent");
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [openingId, setOpeningId] = useState<Id<"projects"> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Remember the guest workspace/session while the user is in the guest
@@ -207,12 +217,20 @@ export default function Dashboard() {
   }, [isAuthenticated, touchWs]);
 
   const handleCreate = useCallback(async () => {
-    if (!newName.trim()) return;
+    if (busy === "create") return;
+    // Same rules the server enforces, checked before the round-trip so the
+    // dialog can point at the problem instead of the request failing later.
+    const invalid = validateProjectNameClient(newName);
+    if (invalid) {
+      setCreateError(invalid);
+      return;
+    }
+    setCreateError(null);
     setBusy("create");
     try {
       const tpl = TEMPLATE_PICKER.find((t) => t.key === selectedTemplate) ?? TEMPLATE_PICKER[TEMPLATE_PICKER.length - 1];
       const id = await createProject({
-        name: newName.trim(),
+        name: normalizeProjectName(newName),
         template: selectedTemplate,
         language: tpl.language,
         files: tpl.files,
@@ -222,11 +240,13 @@ export default function Dashboard() {
       setNewName("");
       navigate(`/ide/${id}`);
     } catch (e) {
-      showToast(e instanceof Error ? e.message : "Failed to create project");
+      // The dialog stays open with the reason (storage limits, quota…) so
+      // nothing typed is lost and the failure isn't swallowed.
+      setCreateError(e instanceof Error ? e.message : "Failed to create the project. Please try again.");
     } finally {
       setBusy(null);
     }
-  }, [newName, selectedTemplate, createProject, navigate, showToast]);
+  }, [busy, newName, selectedTemplate, createProject, navigate]);
 
   const handleRename = useCallback(async () => {
     if (!renaming) return;
@@ -235,7 +255,7 @@ export default function Dashboard() {
       setRenameError(invalid);
       return;
     }
-    const name = renaming.name.trim().replace(/\s+/g, " ");
+    const name = normalizeProjectName(renaming.name);
     const clash = (projects ?? []).some(
       (p) => p._id !== renaming.id && p.name.trim().toLowerCase() === name.toLowerCase(),
     );
@@ -343,6 +363,58 @@ export default function Dashboard() {
     [generateUploadUrl, importZip, navigate, showToast],
   );
 
+  // ---- Search + ordering (all local) ----
+  // The project list already arrives in one reactive query, so filtering and
+  // ordering happen in the browser: immediate results, no backend search index,
+  // and clearing the search re-derives the normal order from the full list
+  // rather than having to restore anything.
+  const isSearching = query.trim().length > 0;
+  const { visibleProjects, recentProjects } = useMemo(() => {
+    const all = projects ?? [];
+    const needle = query.trim().toLowerCase();
+    const matched = needle
+      ? all.filter((p) => p.name.toLowerCase().includes(needle))
+      : [...all];
+
+    const sorted = matched.sort((a, b) => {
+      // Each mode falls back to the name, so equal timestamps can never
+      // reshuffle the list between renders.
+      switch (sort) {
+        case "edited":
+          return b.lastModifiedAt - a.lastModifiedAt || a.name.localeCompare(b.name);
+        case "created":
+          return b.createdAt - a.createdAt || a.name.localeCompare(b.name);
+        case "name":
+          return a.name.localeCompare(b.name);
+        default:
+          return b.lastOpenedAt - a.lastOpenedAt || a.name.localeCompare(b.name);
+      }
+    });
+
+    // Recent projects always mean most-recently-opened, whatever order the main
+    // list is showing. Derived from each project's own `lastOpenedAt` stamp
+    // (refreshed whenever a project is opened in the IDE) — no second history.
+    const recentCutoff = Date.now() - RECENT_WINDOW_MS;
+    const recent = [...matched]
+      .sort((a, b) => b.lastOpenedAt - a.lastOpenedAt)
+      .filter((p) => p.lastOpenedAt >= recentCutoff)
+      .slice(0, RECENT_LIMIT);
+
+    return { visibleProjects: sorted, recentProjects: recent };
+  }, [projects, query, sort]);
+
+  /** Opening a project is the action users repeat most, so the clicked card
+   *  reports that it is the one being opened and a second click can't queue a
+   *  second navigation. */
+  const openProject = useCallback(
+    (id: Id<"projects">) => () => {
+      if (openingId) return;
+      setOpeningId(id);
+      navigate(`/ide/${id}`);
+    },
+    [openingId, navigate],
+  );
+
   // ---- Loading / no workspace ----
   if (projects === undefined || workspace === undefined) {
     return (
@@ -363,12 +435,6 @@ export default function Dashboard() {
       </div>
     );
   }
-
-  // Recent activity is derived from the projects' own `lastOpenedAt` stamp
-  // (refreshed whenever a project is opened in the IDE) — no separate
-  // history is kept.
-  const recentCutoff = Date.now() - RECENT_WINDOW_MS;
-  const recentProjects = projects.filter((p) => p.lastOpenedAt >= recentCutoff).slice(0, RECENT_LIMIT);
 
   const usedPct = Math.min(100, (workspace.usedBytes / workspace.storageLimitBytes) * 100);
   const timeLeftMs = workspace.expiresAt - Date.now();
@@ -408,8 +474,9 @@ export default function Dashboard() {
       </header>
 
       <main className="mx-auto max-w-6xl px-3 py-8 sm:px-4">
-        {/* Recent projects — continue where you left off */}
-        <section className="mb-6">
+        {/* Recent projects — continue where you left off. Hidden while
+            searching so the page shows one unambiguous set of results. */}
+        <section className={isSearching ? "hidden" : "mb-6"}>
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             <Clock className="size-3.5" /> Recent projects
           </h2>
@@ -425,7 +492,8 @@ export default function Dashboard() {
                 <button
                   key={p._id}
                   type="button"
-                  onClick={() => navigate(`/ide/${p._id}`)}
+                  onClick={openProject(p._id)}
+                  aria-label={`Open ${p.name}`}
                   className="group rounded-lg border border-border/60 bg-card p-3 text-left transition-colors hover:border-emerald-500/50"
                 >
                   <p className="truncate text-sm font-medium group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
@@ -482,11 +550,61 @@ export default function Dashboard() {
               e.target.value = "";
             }}
           />
+          {projects.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="ml-auto gap-2"
+                  aria-label={`Sort projects — currently ${SORT_OPTIONS.find((o) => o.key === sort)?.label}`}
+                >
+                  <ArrowUpDown className="size-4 shrink-0" />
+                  <span className="truncate">{SORT_OPTIONS.find((o) => o.key === sort)?.label}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {SORT_OPTIONS.map((option) => (
+                  <DropdownMenuItem key={option.key} onSelect={() => setSort(option.key)}>
+                    <Check
+                      className={`mr-2 size-3.5 shrink-0 ${sort === option.key ? "opacity-100" : "opacity-0"}`}
+                    />
+                    {option.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
+
+        {/* Project search — names only, filtered locally as you type */}
+        {projects.length > 0 && (
+          <div className="relative mb-4">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search projects…"
+              aria-label="Search projects by name"
+              className="pl-9 pr-9"
+            />
+            {isSearching && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="Clear project search"
+                className="absolute right-1.5 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                <X className="size-4" />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* All projects */}
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          All projects ({projects.length})
+          {isSearching
+            ? `Results (${visibleProjects.length} of ${projects.length})`
+            : `All projects (${projects.length})`}
         </h2>
         {projects.length === 0 ? (
           <Card className="border-dashed">
@@ -501,15 +619,34 @@ export default function Dashboard() {
               </Button>
             </CardContent>
           </Card>
+        ) : visibleProjects.length === 0 ? (
+          <Card className="border-dashed">
+            <CardContent className="flex flex-col items-center gap-3 px-4 py-10 text-center">
+              <Search className="size-8 text-muted-foreground/40" />
+              <p className="font-medium">No projects match “{query.trim()}”</p>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                Nothing here is named that — try another name, or clear the search to see all {projects.length} projects again.
+              </p>
+              <Button variant="outline" className="mt-2 gap-2" onClick={() => setQuery("")}>
+                <X className="size-4" /> Clear search
+              </Button>
+            </CardContent>
+          </Card>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {projects.map((p) => (
-              <Card key={p._id} className="group transition-colors hover:border-primary/40">
+            {visibleProjects.map((p) => (
+              <Card
+                key={p._id}
+                aria-busy={openingId === p._id}
+                className="group transition-colors hover:border-primary/40"
+              >
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-2">
                     <button
-                      className="min-w-0 flex-1 text-left"
-                      onClick={() => navigate(`/ide/${p._id}`)}
+                      className="min-w-0 flex-1 text-left disabled:opacity-70"
+                      aria-label={`Open ${p.name}`}
+                      disabled={openingId !== null}
+                      onClick={openProject(p._id)}
                     >
                       <p className="truncate font-medium group-hover:text-primary">{p.name}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
@@ -518,12 +655,17 @@ export default function Dashboard() {
                     </button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="size-7 shrink-0 p-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="size-7 shrink-0 p-0"
+                          aria-label={`Project actions for ${p.name}`}
+                        >
                           <MoreVertical className="size-4" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-44">
-                        <DropdownMenuItem onClick={() => navigate(`/ide/${p._id}`)}>
+                        <DropdownMenuItem onClick={openProject(p._id)}>
                           <FolderOpen className="mr-2 size-3.5" /> Open
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => setRenaming({ id: p._id, name: p.name })}>
@@ -558,8 +700,19 @@ export default function Dashboard() {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
-                  <p className="mt-3 text-[11px] text-muted-foreground">
-                    Last opened {formatDate(p.lastOpenedAt)}
+                  <p className="mt-3 flex items-center gap-1 text-[11px] text-muted-foreground">
+                    {openingId === p._id ? (
+                      <>
+                        <Loader2 className="size-3 shrink-0 animate-spin" />
+                        <span>Opening…</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="truncate">Opened {formatRelativeTime(p.lastOpenedAt)}</span>
+                        <span aria-hidden="true" className="shrink-0">·</span>
+                        <span className="truncate">Edited {formatRelativeTime(p.lastModifiedAt)}</span>
+                      </>
+                    )}
                   </p>
                 </CardContent>
               </Card>
@@ -569,7 +722,13 @@ export default function Dashboard() {
       </main>
 
       {/* New project dialog */}
-      <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
+      <Dialog
+        open={showNewDialog}
+        onOpenChange={(open) => {
+          setShowNewDialog(open);
+          if (!open) setCreateError(null);
+        }}
+      >
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>New project</DialogTitle>
@@ -592,13 +751,33 @@ export default function Dashboard() {
             ))}
             {selectedTemplate === "__hint" && <span />}
           </div>          <Input
+            autoFocus
             placeholder="Project name"
+            aria-label="Project name"
             value={newName}
-            onChange={(e) => setNewName(e.target.value)}
+            disabled={busy === "create"}
+            onChange={(e) => {
+              setCreateError(null);
+              setNewName(e.target.value);
+            }}
             onKeyDown={(e) => e.key === "Enter" && handleCreate()}
           />
+          {createError && (
+            <p className="text-xs text-destructive" role="alert">
+              {createError}
+            </p>
+          )}
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setShowNewDialog(false)}>Cancel</Button>
+            <Button
+              variant="ghost"
+              disabled={busy === "create"}
+              onClick={() => {
+                setShowNewDialog(false);
+                setCreateError(null);
+              }}
+            >
+              Cancel
+            </Button>
             <Button onClick={handleCreate} disabled={!newName.trim() || busy === "create"}>
               {busy === "create" ? <Loader2 className="size-4 animate-spin" /> : "Create project"}
             </Button>

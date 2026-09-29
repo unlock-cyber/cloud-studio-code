@@ -1,3 +1,30 @@
+/** Longest project name the server accepts (see `validateProjectName` in
+ *  convex/projects.ts) — kept here so every name field enforces the same rule. */
+export const MAX_PROJECT_NAME = 60;
+
+/**
+ * Client-side mirror of the server's project-name rules, so a form can point
+ * at the problem before a round-trip. Returns an error message, or null when
+ * the name is acceptable. The server still validates: this is a convenience,
+ * never the authority.
+ */
+export function validateProjectNameClient(raw: string): string | null {
+  const name = raw.trim().replace(/\s+/g, " ");
+  if (!name) return "Enter a project name.";
+  if (name.length > MAX_PROJECT_NAME) {
+    return `Project names can be at most ${MAX_PROJECT_NAME} characters.`;
+  }
+  if (/[\\/:*?"<>|]/.test(name)) {
+    return 'Project names can\'t contain \\ / : * ? " < > |';
+  }
+  return null;
+}
+
+/** Trim + collapse whitespace exactly like the server does before storing. */
+export function normalizeProjectName(raw: string): string {
+  return raw.trim().replace(/\s+/g, " ");
+}
+
 export function formatBytesClient(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;

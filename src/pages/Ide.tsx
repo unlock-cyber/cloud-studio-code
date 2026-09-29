@@ -24,6 +24,7 @@ import {
   Loader2,
   ArrowLeft,
   Command,
+  Pencil,
   PanelLeftClose,
   PanelLeftOpen,
   LayoutPanelLeft,
@@ -93,7 +94,11 @@ import {
 import { requestFileDialog } from "@/lib/fileActionBus";
 import { startPyodideWarmup, subscribePyodideWarmup } from "@/lib/pyodideRunner";
 import { warmEsbuild } from "@/lib/tsRunner";
-import { formatBytesClient } from "@/lib/clientHelpers";
+import {
+  formatBytesClient,
+  normalizeProjectName,
+  validateProjectNameClient,
+} from "@/lib/clientHelpers";
 import { sessionIdFromAuthToken, storeGuestContext } from "@/lib/guestContext";
 import { usePageMeta } from "@/lib/seo";
 import { useAuthToken } from "@convex-dev/auth/react";
@@ -129,6 +134,7 @@ export default function Ide() {
   const deleteFile = useMutation(api.files.remove);
   const duplicateFile = useMutation(api.files.duplicate);
   const setSession = useMutation(api.projects.setSession);
+  const renameProject = useMutation(api.projects.rename);
   const touchWs = useMutation(api.workspaces.touch);
   const updateEditorSettings = useMutation(api.workspaces.updateEditorSettings);
   const setEntryFile = useMutation(api.projects.setEntryFile);
@@ -175,6 +181,10 @@ export default function Ide() {
   const [pyodideState, setPyodideState] = useState<string>("idle");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [projectRenameOpen, setProjectRenameOpen] = useState(false);
+  const [projectRenameName, setProjectRenameName] = useState("");
+  const [projectRenameError, setProjectRenameError] = useState<string | null>(null);
+  const [projectRenameBusy, setProjectRenameBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [autoSaving, setAutoSaving] = useState(false);
   const [runHistory, setRunHistory] = useState<RunHistoryEntry[]>([]);
@@ -521,6 +531,40 @@ export default function Ide() {
     }
     navigate("/dashboard");
   }, [dirtyPaths.size, navigate]);
+
+  /**
+   * Rename the open project without leaving the editor. Same mutation and same
+   * name rules as the dashboard, so a project can't be named one thing there
+   * and something else here. The title bar reads the project from a reactive
+   * query, so it updates the moment the rename lands; a failure keeps the old
+   * name and shows the reason in the dialog.
+   */
+  const handleProjectRename = useCallback(async () => {
+    if (projectRenameBusy) return;
+    const invalid = validateProjectNameClient(projectRenameName);
+    if (invalid) {
+      setProjectRenameError(invalid);
+      return;
+    }
+    const name = normalizeProjectName(projectRenameName);
+    if (name === project?.name) {
+      setProjectRenameOpen(false);
+      setProjectRenameError(null);
+      return;
+    }
+    setProjectRenameBusy(true);
+    setProjectRenameError(null);
+    try {
+      await renameProject({ projectId, name });
+      setProjectRenameOpen(false);
+    } catch (e) {
+      setProjectRenameError(
+        e instanceof Error ? e.message : "Rename failed. Please try again.",
+      );
+    } finally {
+      setProjectRenameBusy(false);
+    }
+  }, [projectRenameBusy, projectRenameName, project?.name, renameProject, projectId]);
 
   const resolveUnsaved = useCallback(
     async (action: "save" | "discard") => {
@@ -1186,6 +1230,15 @@ export default function Ide() {
                   {exporting ? <Loader2 className="mr-2 size-3.5 animate-spin" /> : <Download className="mr-2 size-3.5" />} Export ZIP
                 </DropdownMenuItem>
               </div>
+              <DropdownMenuItem
+                onClick={() => {
+                  setProjectRenameName(project.name);
+                  setProjectRenameError(null);
+                  setProjectRenameOpen(true);
+                }}
+              >
+                <Pencil className="mr-2 size-3.5" /> Rename project
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setShareOpen(true)}>
                 <Share2 className="mr-2 size-3.5" /> Share project
               </DropdownMenuItem>
@@ -1217,6 +1270,59 @@ export default function Ide() {
         open={shareOpen}
         onOpenChange={setShareOpen}
       />
+
+      {/* Rename the open project (same mutation the dashboard uses) */}
+      <Dialog
+        open={projectRenameOpen}
+        onOpenChange={(open) => {
+          if (projectRenameBusy) return;
+          setProjectRenameOpen(open);
+          if (!open) setProjectRenameError(null);
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Rename project</DialogTitle>
+            <DialogDescription>
+              Only the project's name changes — its files, folders, share link and
+              settings stay exactly as they are.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            autoFocus
+            aria-label="Project name"
+            value={projectRenameName}
+            disabled={projectRenameBusy}
+            onChange={(e) => {
+              setProjectRenameError(null);
+              setProjectRenameName(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void handleProjectRename();
+            }}
+          />
+          {projectRenameError && (
+            <p className="text-xs text-destructive" role="alert">
+              {projectRenameError}
+            </p>
+          )}
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              disabled={projectRenameBusy}
+              onClick={() => {
+                setProjectRenameOpen(false);
+                setProjectRenameError(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleProjectRename} disabled={projectRenameBusy}>
+              {projectRenameBusy ? "Renaming…" : "Rename"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Main body */}
       <div className="min-h-0 flex-1">
