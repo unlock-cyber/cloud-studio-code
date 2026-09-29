@@ -19,6 +19,7 @@ const Terms = lazy(() => import("./pages/Terms.tsx"));const Changelog = lazy(() 
 const ChangelogPost = lazy(() => import("./pages/ChangelogPost.tsx"));
 const ChangelogGuestTransfer = lazy(() => import("./pages/ChangelogGuestTransfer.tsx"));
 const ChangelogIdePolish = lazy(() => import("./pages/ChangelogIdePolish.tsx"));
+const ChangelogDeveloperUx = lazy(() => import("./pages/ChangelogDeveloperUx.tsx"));
 const Contributions = lazy(() => import("./pages/Contributions.tsx"));
 const Shared = lazy(() => import("./pages/Shared.tsx"));
 const Backstage = lazy(() => import("./pages/Backstage.tsx"));
@@ -139,6 +140,7 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/changelog/introducing-cloud-studio-code" element={<ChangelogPost />} />
               <Route path="/changelog/guest-workspace-transfer" element={<ChangelogGuestTransfer />} />
               <Route path="/changelog/ide-polish-update" element={<ChangelogIdePolish />} />
+              <Route path="/changelog/ide-developer-ux-update" element={<ChangelogDeveloperUx />} />
               <Route path="/contributions" element={<Contributions />} />
               {/* Public read-only view of a shared project — no auth required. */}
               <Route path="/s/:token" element={<Shared />} />
