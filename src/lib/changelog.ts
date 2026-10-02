@@ -33,9 +33,18 @@ export type ChangelogEntry = {
 // missing metadata at runtime).
 const CHANGELOG = [
   {
+    path: "/changelog/mobile-experience-fixes",
+    title: "Mobile Experience Fixes",
+    date: "2026-10-07",
+    badge: "Bug Fix",
+    cta: "Read the update",
+    metaDescription:
+      "Two mobile fixes in Cloud Studio Code: header branding now adapts to the screen width instead of wrapping, and the IDE fits the mobile viewport so its navigation stays reachable without page-level scrolling.",
+  },
+  {
     path: "/changelog/workspace-project-management",
     title: "Workspace & Project Management",
-    date: "2026-09-29",
+    date: "2026-10-06",
     badge: "Enhancement",
     cta: "Read the update",
     metaDescription:
@@ -43,17 +52,17 @@ const CHANGELOG = [
   },
   {
     path: "/changelog/collaboration-2-0",
-    title: "Collaboration 2.0",
-    date: "2026-09-29",
+    title: "Redefined Collaboration",
+    date: "2026-10-03",
     badge: "Enhancement",
     cta: "Read the update",
     metaDescription:
-      "Collaboration 2.0 refines project sharing in Cloud Studio Code: see exactly what a shared link allows, preview the visitor's view, and get a clearer read-only experience for anyone you share with.",
+      "Redefined Collaboration refines project sharing in Cloud Studio Code: see exactly what a shared link allows, preview the visitor's view, and get a clearer read-only experience for anyone you share with.",
   },
   {
     path: "/changelog/collaboration-update",
     title: "Introducing Project Collaboration",
-    date: "2026-09-29",
+    date: "2026-10-02",
     badge: "New Feature",
     cta: "Read the update",
     metaDescription:

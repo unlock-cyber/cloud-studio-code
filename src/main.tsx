@@ -22,6 +22,9 @@ const ChangelogIdePolish = lazy(() => import("./pages/ChangelogIdePolish.tsx"));
 const ChangelogDeveloperUx = lazy(() => import("./pages/ChangelogDeveloperUx.tsx"));
 const ChangelogCollaboration = lazy(() => import("./pages/ChangelogCollaboration.tsx"));
 const ChangelogCollaboration20 = lazy(() => import("./pages/ChangelogCollaboration20.tsx"));
+const ChangelogMobileExperienceFixes = lazy(
+  () => import("./pages/ChangelogMobileExperienceFixes.tsx"),
+);
 const ChangelogWorkspaceProjectManagement = lazy(
   () => import("./pages/ChangelogWorkspaceProjectManagement.tsx"),
 );
@@ -148,6 +151,10 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/changelog/ide-developer-ux-update" element={<ChangelogDeveloperUx />} />
               <Route path="/changelog/collaboration-update" element={<ChangelogCollaboration />} />
               <Route path="/changelog/collaboration-2-0" element={<ChangelogCollaboration20 />} />
+              <Route
+                path="/changelog/mobile-experience-fixes"
+                element={<ChangelogMobileExperienceFixes />}
+              />
               <Route
                 path="/changelog/workspace-project-management"
                 element={<ChangelogWorkspaceProjectManagement />}
