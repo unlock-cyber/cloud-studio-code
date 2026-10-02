@@ -1136,7 +1136,17 @@ export default function Ide() {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
+    /* The shell is the whole application frame: header, one active panel and
+       the mobile panel switcher (Files / Terminal / Preview / Editor). Its
+       internal flex layout was already correct — every panel scrolls itself —
+       but `h-screen` (100vh) measures the viewport with the browser UI
+       collapsed, which is taller than what is actually visible on a phone. The
+       extra height pushed the bottom switcher below the fold and made the whole
+       document scroll. `h-dvh` tracks the real viewport instead (identical to
+       100vh on desktop). It replaces `h-screen` rather than following it:
+       Tailwind emits `h-screen` after `h-dvh`, so keeping both would win with
+       100vh. */
+    <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
       {/* Title bar */}
       <header className="flex h-12 shrink-0 items-center gap-1.5 border-b border-border/60 bg-background px-2 sm:px-3 md:h-11">
         <Button variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-muted-foreground md:h-7" onClick={leaveProject}>

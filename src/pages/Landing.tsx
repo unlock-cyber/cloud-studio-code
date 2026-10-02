@@ -155,11 +155,19 @@ export default function Landing() {
       {/* Nav */}
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur">
         <div className="mx-auto flex h-14 max-w-6xl items-center px-4">
-          <div className="flex items-center gap-2">
-            <TerminalSquare className="size-5 text-emerald-500 dark:text-emerald-400" />
-            <span className="inline-flex items-start gap-1">
-              <span className="font-semibold">Cloud Studio Code</span>
-              <BetaBadge className="-translate-y-1" />
+          <div className="flex min-w-0 items-center gap-2">
+            <TerminalSquare className="size-5 shrink-0 text-emerald-500 dark:text-emerald-400" />
+            <span className="inline-flex min-w-0 items-start gap-1">
+              {/* The brand block is a shrinkable flex item sharing the row with
+                  the sign-in / dashboard actions, and the full product name
+                  wrapped across lines on a phone, making the header grow.
+                  One line, always: full name from `sm`, a short form from
+                  375px, and the mark alone below that. Desktop is unchanged. */}
+              <span className="min-w-0 truncate font-semibold">
+                <span className="hidden sm:inline">Cloud Studio Code</span>
+                <span className="inline max-[374px]:hidden sm:hidden">CS Code</span>
+              </span>
+              <BetaBadge className="-translate-y-1 shrink-0" />
             </span>
           </div>
           <nav className="ml-auto flex items-center gap-1">

@@ -449,7 +449,12 @@ export default function Dashboard() {
           <div className="flex min-w-0 items-center gap-2">
             <TerminalSquare className="size-5 shrink-0 text-primary" />
             <span className="inline-flex min-w-0 items-start gap-1">
-              <span className="truncate font-semibold">Cloud Studio Code</span>
+              {/* Same compact brand as the marketing header: one line at every
+                  width, short form on a phone, full name from `sm`. */}
+              <span className="min-w-0 truncate font-semibold">
+                <span className="hidden sm:inline">Cloud Studio Code</span>
+                <span className="inline max-[374px]:hidden sm:hidden">CS Code</span>
+              </span>
               <BetaBadge className="-translate-y-1 shrink-0" />
             </span>
           </div>
