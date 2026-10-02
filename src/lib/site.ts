@@ -15,7 +15,7 @@
 // inside the Convex runtime as well as in the browser bundle.
 
 /** Authoritative production origin for Cloud Studio Code (no trailing slash). */
-export const PRODUCTION_ORIGIN = "https://www.cscode.freebuff.app";
+export const PRODUCTION_ORIGIN = "https://cscode.freebuff.app";
 
 /**
  * Normalise a configured origin into a usable absolute origin, or `null` when
