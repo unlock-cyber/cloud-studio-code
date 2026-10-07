@@ -91,6 +91,11 @@ import {
   type RunHistoryEntry,
   type RunHistoryState,
 } from "@/lib/runHistory";
+import {
+  loadRecentFiles,
+  pushRecentFile,
+  saveRecentFiles,
+} from "@/lib/recentFiles";
 import { requestFileDialog } from "@/lib/fileActionBus";
 import { startPyodideWarmup, subscribePyodideWarmup } from "@/lib/pyodideRunner";
 import { warmEsbuild } from "@/lib/tsRunner";
@@ -104,6 +109,12 @@ import { usePageMeta } from "@/lib/seo";
 import { useAuthToken } from "@convex-dev/auth/react";
 
 const RUNNABLE_LANGS: LangId[] = ["python", "javascript", "typescript", "c", "cpp", "java", "bash", "sql"];
+
+/**
+ * Command-palette group order. Groups that end up with no commands are
+ * skipped when rendering, so an empty "Recent" heading never appears.
+ */
+const COMMAND_GROUPS = ["Recent", "Files", "Actions", "View", "Project"];
 
 // Auto-Save settles this long after the last keystroke, so typing never issues
 // a write per character.
@@ -188,6 +199,7 @@ export default function Ide() {
   const [toast, setToast] = useState<string | null>(null);
   const [autoSaving, setAutoSaving] = useState(false);
   const [runHistory, setRunHistory] = useState<RunHistoryEntry[]>([]);
+  const [recentFiles, setRecentFiles] = useState<string[]>([]);
   // Action waiting on the unsaved-changes confirmation (closing a dirty tab,
   // or leaving the project while edits are pending).
   const [unsavedPrompt, setUnsavedPrompt] = useState<
@@ -202,6 +214,7 @@ export default function Ide() {
   const projectIdRef = useRef(projectId);
   projectIdRef.current = projectId;
   const runHistoryRef = useRef<RunHistoryEntry[]>([]);
+  const recentFilesRef = useRef<string[]>([]);
   const runContextRef = useRef<{ path: string; lang: LangId; startedAt: number } | null>(null);
   const lastExitCodeRef = useRef(0);
   const autoSaveInFlight = useRef(false);
@@ -243,6 +256,37 @@ export default function Ide() {
     runHistoryRef.current = stored;
     setRunHistory(stored);
   }, [project?._id]);
+
+  // ---- Recent files (local only) ----
+  // A short, per-project list of the files opened most recently, so quick
+  // navigation can offer them first. Paths only, local, capped — see
+  // lib/recentFiles. Scoped by project id, exactly like the run history.
+  const recentLoadedFor = useRef<string | null>(null);
+  useEffect(() => {
+    const id = project?._id;
+    if (!id || recentLoadedFor.current === id) return;
+    recentLoadedFor.current = id;
+    const stored = loadRecentFiles(id);
+    recentFilesRef.current = stored;
+    setRecentFiles(stored);
+  }, [project?._id]);
+
+  // Every way of opening a file (explorer, palette, tab, run history) ends up
+  // changing the active path, so recency is recorded in one place. A path that
+  // no longer exists in the project is ignored rather than remembered.
+  useEffect(() => {
+    if (!activePath || !filesRes) return;
+    const opened = filesRes.some(
+      (f) => f.path === activePath && !f.isFolder && !f.isBinary,
+    );
+    if (!opened) return;
+    const prev = recentFilesRef.current;
+    const next = pushRecentFile(prev, activePath);
+    if (next === prev) return;
+    recentFilesRef.current = next;
+    setRecentFiles(next);
+    saveRecentFiles(projectId, next);
+  }, [activePath, filesRes, projectId]);
 
   // ---- Warm runtimes ----
   useEffect(() => {
@@ -389,7 +433,7 @@ export default function Ide() {
     (path: string) => {
       const next = tabs.filter((t) => t.path !== path);
       const nextActive =
-        activePath === path ? next[next.length - 1]?.path ?? null : activePath;
+        activePath === path ? neighbourTab(tabs, next, path) : activePath;
       setTabs(next);
       setActivePath(nextActive);
       persistSession(next.map((t) => t.path), nextActive);
@@ -408,6 +452,19 @@ export default function Ide() {
       closeTabNow(path);
     },
     [tabs, closeTabNow],
+  );
+
+  /** Move to the next/previous open tab, wrapping around — the keyboard path
+   *  between files that the palette's list alone doesn't provide. */
+  const cycleTab = useCallback(
+    (delta: number) => {
+      const prev = tabsRef.current;
+      if (prev.length === 0) return;
+      const idx = prev.findIndex((t) => t.path === activePath);
+      const target = prev[(idx + delta + prev.length) % prev.length];
+      if (target && target.path !== activePath) openFile(target.path);
+    },
+    [activePath, openFile],
   );
 
   // ---- Saving ----
@@ -429,29 +486,45 @@ export default function Ide() {
     }
   }, [tabs, activePath, projectId, saveFile, touchWs, showToast]);
 
-  // Ctrl/Cmd+S outside the editor
+  // ---- Keyboard shortcuts ----
+  // One listener for the whole IDE (Ctrl+P used to be registered in an effect
+  // of its own). The handlers live in refs, so typing never re-subscribes it.
+  // Keys Monaco already consumed are skipped: with the editor focused,
+  // Ctrl+S / Ctrl+Enter arrive here already handled, and acting on them again
+  // would fire a second save or run.
+  const saveActiveRef = useRef(saveActive);
+  saveActiveRef.current = saveActive;
+  const handleSaveAllRef = useRef<() => void>(() => undefined);
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+      if (e.defaultPrevented) return;
+      if (!e.ctrlKey && !e.metaKey) return;
+      const key = e.key.toLowerCase();
+      if (key === "s") {
         e.preventDefault();
-        saveActive();
+        if (e.shiftKey) void handleSaveAllRef.current();
+        else void saveActiveRef.current();
+        return;
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      if (e.key === "Enter") {
         e.preventDefault();
         handleRunRef.current?.();
+        return;
       }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "p") {
+      if (key === "p") {
+        // Ctrl+P and Ctrl+Shift+P both open the palette.
         e.preventDefault();
         setCommandOpen(true);
+        return;
       }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "b") {
+      if (key === "b" && !e.shiftKey && !e.altKey) {
         e.preventDefault();
         setExplorerOpen((v) => !v);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [saveActive]);
+  }, []);
 
   // ---- Files ----
   const allFiles = filesRes ?? [];
@@ -899,7 +972,7 @@ export default function Ide() {
       const next = tabs.filter((t) => t.path !== path && !t.path.startsWith(path + "/"));
       const nextActive =
         activePath && (activePath === path || activePath.startsWith(path + "/"))
-          ? next[next.length - 1]?.path ?? null
+          ? neighbourTab(tabs, next, activePath)
           : activePath;
       setTabs(next);
       setActivePath(nextActive);
@@ -950,6 +1023,8 @@ export default function Ide() {
       setSaving(false);
     }
   }, [saveAllDirty, showToast]);
+  // Ctrl+Shift+S (see the shortcut listener above).
+  handleSaveAllRef.current = handleSaveAll;
 
   const handleDownloadFile = useCallback(
     async (path: string) => {
@@ -996,19 +1071,23 @@ export default function Ide() {
   }, [projectId, exportZip, showToast]);
 
   // ---- Command palette ----
-  useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") {
-        e.preventDefault();
-        setCommandOpen(true);
-      }
-    };
-    window.addEventListener("keydown", down);
-    return () => window.removeEventListener("keydown", down);
-  }, []);
-
+  // Every command below calls the same handler its button/context menu uses —
+  // the palette adds discoverability, never a second implementation.
   const commands = useMemo(() => {
     const items: Array<{ id: string; label: string; hint?: string; run: () => void; group: string }> = [];
+    // Most recently opened files first: the fastest way back to what you were
+    // just editing. Paths that no longer exist are skipped, so a deleted file
+    // silently drops out instead of offering a blank tab.
+    for (const path of recentFiles) {
+      if (!textFiles.some((f) => f.path === path)) continue;
+      items.push({
+        id: `recent:${path}`,
+        label: path,
+        hint: "Recent",
+        group: "Recent",
+        run: () => openFile(path),
+      });
+    }
     for (const f of textFiles) {
       items.push({
         id: `file:${f.path}`,
@@ -1021,7 +1100,7 @@ export default function Ide() {
     items.push({
       id: "saveall",
       label: "Save all files",
-      hint: dirtyPaths.size > 0 ? `${dirtyPaths.size} unsaved` : undefined,
+      hint: dirtyPaths.size > 0 ? `${dirtyPaths.size} unsaved` : "Ctrl+Shift+S",
       group: "Actions",
       run: () => void handleSaveAll(),
     });
@@ -1035,6 +1114,12 @@ export default function Ide() {
     }
     if (runState === "running" || runState === "starting") {
       items.push({ id: "stop", label: "Stop the running process", group: "Actions", run: handleStop });
+    }
+    if (tabs.length > 1) {
+      items.push(
+        { id: "nexttab", label: "Go to next tab", group: "View", run: () => cycleTab(1) },
+        { id: "prevtab", label: "Go to previous tab", group: "View", run: () => cycleTab(-1) },
+      );
     }
     items.push(
       { id: "newfile", label: "New file", group: "Actions", run: () => handleCreate(null, false) },
@@ -1078,6 +1163,9 @@ export default function Ide() {
     handleCreate,
     autoSaveEnabled,
     updateEditorSettings,
+    recentFiles,
+    cycleTab,
+    tabs.length,
   ]);
 
   // ---- Workspace expiry watch ----
@@ -1788,12 +1876,15 @@ export default function Ide() {
       <CommandDialog open={commandOpen} onOpenChange={setCommandOpen}>
         <CommandInput placeholder="Search files and commands…" />
         <CommandList>
-          <CommandEmpty>No results.</CommandEmpty>
-          {["Files", "Actions", "View", "Project"].map((group) => (
+          <CommandEmpty>No files or commands match.</CommandEmpty>
+          {COMMAND_GROUPS.filter((group) => commands.some((c) => c.group === group)).map((group) => (
             <CommandGroup key={group} heading={group}>
               {commands.filter((c) => c.group === group).map((c) => (
                 <CommandItem
                   key={c.id}
+                  // A file can be listed under both Recent and Files; an
+                  // explicit unique value keeps the two rows independent.
+                  value={`${c.group} ${c.label}`}
                   onSelect={() => {
                     setCommandOpen(false);
                     c.run();
@@ -1857,6 +1948,29 @@ export default function Ide() {
       )}
     </div>
   );
+}
+
+/**
+ * Which tab should become active after some tabs are removed: the closest
+ * remaining tab to the right of the one that went away, or the closest one to
+ * its left when there was nothing to the right. Keeps the context you were
+ * working in instead of jumping to the end of the strip.
+ */
+function neighbourTab(
+  before: EditorTab[],
+  after: EditorTab[],
+  removedPath: string,
+): string | null {
+  const idx = before.findIndex((t) => t.path === removedPath);
+  const remaining = new Set(after.map((t) => t.path));
+  if (idx !== -1) {
+    const right = before.slice(idx + 1).find((t) => remaining.has(t.path));
+    if (right) return right.path;
+    for (let i = idx - 1; i >= 0; i--) {
+      if (remaining.has(before[i].path)) return before[i].path;
+    }
+  }
+  return after[after.length - 1]?.path ?? null;
 }
 
 /** Shown when a project genuinely has no files yet — an empty project is a

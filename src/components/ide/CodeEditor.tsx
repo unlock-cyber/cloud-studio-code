@@ -157,6 +157,15 @@ export function CodeEditor({
     });
   };
 
+  // Keep the editor focused whenever the active file changes (desktop only):
+  // after picking a file in the explorer or the command palette, typing should
+  // just work. On narrow screens this would raise the on-screen keyboard, so
+  // it is skipped — and a read-only viewer has nothing to type.
+  useEffect(() => {
+    if (compact || readOnly) return;
+    editorRef.current?.focus();
+  }, [tab.path, compact, readOnly]);
+
   const value = tab.draft;
   const isMarkdown = lang === "markdown";
   const isStructured = lang === "json" || lang === "yaml" || lang === "xml";

@@ -28,6 +28,9 @@ const ChangelogMobileExperienceFixes = lazy(
 const ChangelogWorkspaceProjectManagement = lazy(
   () => import("./pages/ChangelogWorkspaceProjectManagement.tsx"),
 );
+const ChangelogIdeProductivity = lazy(
+  () => import("./pages/ChangelogIdeProductivity.tsx"),
+);
 const Contributions = lazy(() => import("./pages/Contributions.tsx"));
 const Shared = lazy(() => import("./pages/Shared.tsx"));
 const Backstage = lazy(() => import("./pages/Backstage.tsx"));
@@ -158,6 +161,10 @@ createRoot(document.getElementById("root")!).render(
               <Route
                 path="/changelog/workspace-project-management"
                 element={<ChangelogWorkspaceProjectManagement />}
+              />
+              <Route
+                path="/changelog/ide-productivity-update"
+                element={<ChangelogIdeProductivity />}
               />
               <Route path="/contributions" element={<Contributions />} />
               {/* Public read-only view of a shared project — no auth required. */}

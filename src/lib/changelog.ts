@@ -33,6 +33,15 @@ export type ChangelogEntry = {
 // missing metadata at runtime).
 const CHANGELOG = [
   {
+    path: "/changelog/ide-productivity-update",
+    title: "IDE Productivity",
+    date: "2026-10-07",
+    badge: "Enhancement",
+    cta: "Read the update",
+    metaDescription:
+      "Cloud Studio Code gets recent files in the command palette, Save All on Ctrl+Shift+S, more predictable tab closing, next and previous tab commands, and editor focus that follows the file you open.",
+  },
+  {
     path: "/changelog/mobile-experience-fixes",
     title: "Mobile Experience Fixes",
     date: "2026-10-07",
