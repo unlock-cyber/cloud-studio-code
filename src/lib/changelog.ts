@@ -35,7 +35,7 @@ const CHANGELOG = [
   {
     path: "/changelog/ide-productivity-update",
     title: "IDE Productivity",
-    date: "2026-10-07",
+    date: "2026-10-08",
     badge: "Enhancement",
     cta: "Read the update",
     metaDescription:
@@ -133,12 +133,10 @@ export function changelogEntry(path: ChangelogPath): ChangelogEntry {
 
 // Pinned to UTC: an ISO date is parsed as UTC midnight, so formatting in a
 // timezone behind UTC would otherwise render the day before.
-const dateFormatter = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-  timeZone: "UTC",
-});
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
 
 /** Published entries, newest first. */
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [...CHANGELOG].sort((a, b) =>
@@ -147,7 +145,14 @@ export const CHANGELOG_ENTRIES: ChangelogEntry[] = [...CHANGELOG].sort((a, b) =>
 
 /** Human-readable release date, e.g. "28 September 2026". */
 export function formatChangelogDate(isoDate: string): string {
-  return dateFormatter.format(new Date(`${isoDate}T00:00:00Z`));
+  const d = new Date(`${isoDate}T00:00:00Z`);
+  if (isNaN(d.getTime())) return isoDate;
+  const day = d.getUTCDate();
+  const month = MONTH_NAMES[d.getUTCMonth()];
+  const year = d.getUTCFullYear();
+  // DD = always two digits, 0-padded for 1-9.
+  const paddedDay = day < 10 ? `0${day}` : `${day}`;
+  return `${paddedDay} ${month} ${year}`;
 }
 
 /** The most recent published entry, or null when there are none. */
