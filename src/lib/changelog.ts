@@ -131,10 +131,8 @@ export function changelogEntry(path: ChangelogPath): ChangelogEntry {
   return entry;
 }
 
-// Pinned to IST: an ISO date is parsed as UTC midnight, then converted to
-// India Standard Time so the visible day matches an IST local calendar.
-// (Kept explicitly here so the timezone assumption stays readable and changeable.)
-const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+// Date-only changelog values (YYYY-MM-DD are calendar dates, not timestamps).
+// Format the stored calendar date directly; no timezone conversion is applied.
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -148,13 +146,13 @@ export const CHANGELOG_ENTRIES: ChangelogEntry[] = [...CHANGELOG].sort((a, b) =>
 
 /** Human-readable release date, e.g. "28 September 2026". */
 export function formatChangelogDate(isoDate: string): string {
-  const d = new Date(`${isoDate}T00:00:00Z`);
+  // YYYY-MM-DD is a calendar date, not a timestamp. Parse it as local so the
+  // calendar fields come out exactly as stored, with no timezone offset applied.
+  const d = new Date(isoDate);
   if (isNaN(d.getTime())) return isoDate;
-  // Convert to IST before extracting calendar fields.
-  const ist = new Date(d.getTime() + IST_OFFSET_MS);
-  const day = ist.getUTCDate();
-  const month = MONTH_NAMES[ist.getUTCMonth()];
-  const year = ist.getUTCFullYear();
+  const day = d.getDate(); // calendar day as stored
+  const month = MONTH_NAMES[d.getMonth()];
+  const year = d.getFullYear();
   // DD = always two digits, 0-padded for 1-9.
   const paddedDay = day < 10 ? `0${day}` : `${day}`;
   return `${paddedDay} ${month} ${year}`;
