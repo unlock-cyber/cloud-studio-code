@@ -329,7 +329,18 @@ export default function Landing() {
       {latestUpdate && (
         <section className="border-t border-border/60 py-16">
           <div className="mx-auto max-w-6xl px-4">
-            <h2 className="text-2xl font-bold">What&rsquo;s New</h2>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+              <h2 className="text-2xl font-bold">What&rsquo;s New</h2>
+              {/* Secondary, always-available route to the full changelog — the
+                  index itself stays the source of truth for the entries. */}
+              <Link
+                to="/changelog"
+                className="inline-flex items-center gap-1 rounded-sm text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              >
+                See all updates
+                <ArrowRight className="size-3.5" aria-hidden="true" />
+              </Link>
+            </div>
             <Link
               to={latestUpdate.path}
               className="group mt-6 flex cursor-pointer flex-col gap-4 rounded-xl border border-border/60 bg-card p-5 text-left transition-colors hover:border-emerald-500/30 hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:p-6"
