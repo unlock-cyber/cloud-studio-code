@@ -2,11 +2,20 @@
 // via the public Judge0 CE API. Real compilers, real stdout/stderr/exit codes.
 // Note: public Judge0 CE is rate-limited; errors surface honestly in the UI.
 
-import { judge0LangFor, type LangId, type RunResult } from "./languages";
+import {
+  ExecutionStoppedError,
+  judge0LangFor,
+  type LangId,
+  type RunResult,
+} from "./languages";
 
 const JUDGE0_ENDPOINT = "https://ce.judge0.com/submissions";
 const POLL_INTERVAL_MS = 800;
 const MAX_POLL_MS = 45_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export type Judge0Status = {
   id: number;
@@ -57,6 +66,13 @@ export function runRemote(
 ): RemoteRunHandle {
   const languageId = judge0LangFor(lang);
   let aborted = false;
+  // Aborting the controller also resolves any in-flight sleep/fetch, so a Stop
+  // settles the run promptly instead of waiting out the poll interval.
+  const controller = new AbortController();
+  const abortedPromise = new Promise<void>((resolve) => {
+    if (controller.signal.aborted) return resolve();
+    controller.signal.addEventListener("abort", () => resolve(), { once: true });
+  });
 
   const promise = (async (): Promise<RunResult> => {
     const start = Date.now();
@@ -76,6 +92,7 @@ export function runRemote(
           source_code: source,
           cpu_time_limit: Math.max(1, Math.min(10, Math.round(opts.timeoutMs / 1000))),
         }),
+        signal: controller.signal,
       },
     );
 
@@ -94,15 +111,19 @@ export function runRemote(
 
     while (Date.now() < deadline) {
       if (aborted) {
-        throw new Error("[stopped] execution was stopped by the user.");
+        throw new ExecutionStoppedError();
       }
-      await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+      await Promise.race([sleep(POLL_INTERVAL_MS), abortedPromise]);
+      if (aborted) {
+        throw new ExecutionStoppedError();
+      }
       const res = await fetch(
         `${JUDGE0_ENDPOINT}/${token}?base64_encoded=false`,
+        { signal: controller.signal },
       );
       if (res.status === 429) {
         opts.onInfo("Rate limited by the free sandbox — retrying...");
-        await new Promise((r) => setTimeout(r, 2000));
+        await Promise.race([sleep(2000), abortedPromise]);
         continue;
       }
       if (!res.ok) {
@@ -168,12 +189,23 @@ export function runRemote(
       engine: "judge0",
       durationMs,
     };
-  })();
+  })().catch((e: unknown) => {
+    // Aborting an in-flight fetch rejects with an AbortError; report it as an
+    // intentional stop so a user Stop is never displayed as a generic failure.
+    if (aborted && !(e instanceof ExecutionStoppedError)) {
+      throw new ExecutionStoppedError();
+    }
+    throw e;
+  });
 
   return {
     promise,
     stop: () => {
       aborted = true;
+      // Stops the local tracking (polling and in-flight requests). The remote
+      // job is not ours to kill, so this is a request, not a confirmed
+      // termination of the sandboxed process.
+      controller.abort();
     },
   };
 }

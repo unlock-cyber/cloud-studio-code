@@ -8,7 +8,25 @@ export type RunResult = {
   compileOutput?: string;
   engine: string;
   durationMs: number;
+  /**
+   * Set when the user explicitly stopped the execution. This is separate from
+   * the exit code: a stopped run is reported as "stopped" by the RunManager
+   * rather than being mistaken for a failure.
+   */
+  stopped?: boolean;
 };
+
+/**
+ * Raised by runners when an execution is aborted by the user's Stop. Kept
+ * distinct from real errors so an intentional stop is never displayed as a
+ * generic execution failure.
+ */
+export class ExecutionStoppedError extends Error {
+  constructor(message = "execution was stopped by the user.") {
+    super(message);
+    this.name = "ExecutionStoppedError";
+  }
+}
 
 export type EngineId =
   | "pyodide"

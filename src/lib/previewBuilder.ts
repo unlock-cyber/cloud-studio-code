@@ -68,6 +68,17 @@ function escapeHtmlAttr(s: string): string {
 }
 
 /**
+ * File types the preview builder actually consumes: an HTML document, or the
+ * JS/CSS it inlines (and synthesizes a document from when there is no HTML).
+ * This is the runtime's own definition of "this file feeds the preview", so
+ * the IDE's preview affordances are derived from it rather than guessed from
+ * the active file's language.
+ */
+export function isPreviewAssetPath(path: string): boolean {
+  return /\.(html?|js|jsx|mjs|css)$/i.test(path);
+}
+
+/**
  * Inline local <script src> / <link href> / <img src> references with actual
  * project file contents so the preview is fully self-contained.
  */

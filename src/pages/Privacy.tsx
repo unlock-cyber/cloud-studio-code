@@ -445,6 +445,23 @@ export default function Privacy() {
             URLs, and very long-running or resource-heavy programs may be stopped.
           </p>
           <p>
+            Most languages are executed entirely in your browser: Python, JavaScript and
+            TypeScript run through WebAssembly and sandboxed workers, and SQL runs on
+            SQLite compiled to WebAssembly. For those languages your code is not sent
+            anywhere to be executed.
+          </p>
+          <p>
+            C, C++, Java and Bash are different: they are compiled and executed on a
+            third-party remote sandbox — the public Judge0 CE service (ce.judge0.com).
+            When you run one of those languages, the source code you submit is sent to
+            that service so it can be compiled and executed, and the standard output,
+            standard error and exit status it produces are returned to Cloud Studio
+            Code and shown to you. Only those runs are sent to the remote service; the
+            files stored in your workspace stay in the infrastructure described below.
+            We use the service as provided and make no promise about how it handles a
+            request on its side, or for how long it keeps it.
+          </p>
+          <p>
             The application itself — backend, database, and hosting — runs on
             third-party infrastructure described in section 22. Your code and files
             stored in your workspace reside in that infrastructure.

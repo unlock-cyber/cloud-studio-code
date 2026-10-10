@@ -82,7 +82,7 @@ import {
   type LangId,
 } from "@/lib/languages";
 import { runManager, type RunState } from "@/lib/runOrchestrator";
-import { buildPreviewHtml, type PreviewFiles } from "@/lib/previewBuilder";
+import { buildPreviewHtml, isPreviewAssetPath, type PreviewFiles } from "@/lib/previewBuilder";
 import { fileIconMeta } from "@/lib/fileTree";
 import {
   loadRunHistory,
@@ -671,20 +671,35 @@ export default function Ide() {
   }, [dirtyPaths.size]);
 
   // ---- Preview (uses server contents so ALL project files are included) ----
+  // The one place preview HTML is produced: every project file from the server
+  // with unsaved drafts overlaid. Both the live rebuild and the Run-triggered
+  // build go through it, so Run can never replace a complete preview with one
+  // built from only the open tabs.
+  const buildProjectPreview = useCallback(
+    (drafts: EditorTab[]): string => {
+      const contents: PreviewFiles = new Map();
+      if (allContents) {
+        for (const f of allContents) contents.set(f.path, f.content);
+      }
+      for (const t of drafts) {
+        // Overlay unsaved edits. Before the server listing has arrived the open
+        // tabs are the only available source, so use them as a fallback.
+        if (!allContents || t.draft !== t.content) contents.set(t.path, t.draft);
+      }
+      return buildPreviewHtml(contents, project?.entryFile ?? null).html;
+    },
+    [allContents, project?.entryFile],
+  );
+
   useEffect(() => {
+    // Live rebuild: only from the complete project listing, so a preview is
+    // never briefly built from a partial set of files.
     if (!allContents) return;
-    const contents = new Map<string, string>();
-    for (const f of allContents) {
-      contents.set(f.path, f.content);
-    }
-    // Overlay unsaved drafts so preview reflects the editor live
-    for (const t of tabs) {
-      if (t.draft !== t.content) contents.set(t.path, t.draft);
-    }
-    const previewFiles: PreviewFiles = contents;
-    const built = buildPreviewHtml(previewFiles, project?.entryFile ?? null);
-    setPreviewHtml((prevHtml) => (built.html && built.html !== prevHtml ? built.html : prevHtml));
-  }, [allContents, tabs, project?.entryFile]);
+    const html = buildProjectPreview(tabs);
+    if (!html) return;
+    // Unchanged output leaves the iframe alone (no pointless reload).
+    setPreviewHtml((prevHtml) => (html !== prevHtml ? html : prevHtml));
+  }, [allContents, buildProjectPreview, tabs]);
 
   const handlePreviewMessage = useCallback((msg: PreviewMessage) => {
     const ts = Date.now();
@@ -721,9 +736,14 @@ export default function Ide() {
   );
   const previewAvailable = hasWebPreview;
 
-  // Auto-hide the preview panel when it isn't applicable to the current file.
+  // Auto-hide the preview panel when it isn't applicable to the current
+  // project. On mobile the panel is a full screen, so leaving it selected
+  // would strand the user on an empty preview — return them to the editor.
   useEffect(() => {
-    if (!previewAvailable) setPreviewOpen(false);
+    if (!previewAvailable) {
+      setPreviewOpen(false);
+      setMobilePanel((panel) => (panel === "preview" ? "editor" : panel));
+    }
   }, [previewAvailable]);
 
   const runCallbacks = useMemo<Parameters<typeof runManager.runSingleFile>[1]>(
@@ -757,8 +777,12 @@ export default function Ide() {
 
   useEffect(() => {
     // The orchestrator needs ad-hoc actions (SQLite persistence) with auth
-    // context. A dedicated ConvexHttpClient authenticated via the same
-    // deployment works for these non-reactive calls.
+    // context. A dedicated ConvexHttpClient works for these non-reactive calls
+    // — but the SQL actions run through `requireActiveWorkspace`, so it must
+    // carry the same session token the reactive client uses. Without it every
+    // load/save is rejected and the database silently never persists.
+    // Re-created when the token rotates so a refreshed token is always used.
+    // The token is only handed to Convex: never logged, never shown in the UI.
     let disposed = false;
     let client: import("convex/browser").ConvexHttpClient | null = null;
     (async () => {
@@ -766,6 +790,9 @@ export default function Ide() {
       const api = (await import("@/convex/_generated/api")).api;
       if (disposed) return;
       client = new CHC(import.meta.env.VITE_CONVEX_URL);
+      // A static token: the effect re-runs when `useAuthToken()` hands back a
+      // refreshed one, which is when the client is rebuilt.
+      if (providerToken) client.setAuth(providerToken);
       runManager.setClient({
         action: async <R,>(name: "load" | "save", args: Record<string, unknown>): Promise<R> => {
           if (!client) throw new Error("not ready");
@@ -778,7 +805,12 @@ export default function Ide() {
     return () => {
       disposed = true;
     };
-  }, []);
+  }, [providerToken]);
+
+  // Leaving the IDE (or unmounting) must not leave a run behind: tear down
+  // cancellable work and invalidate anything still in flight so late output
+  // cannot reach a dead view or hold the single-run lock after a remount.
+  useEffect(() => () => runManager.dispose(), []);
 
   const handleRun = useCallback(async () => {
     if (!activePath || !activeTab) {
@@ -800,10 +832,11 @@ export default function Ide() {
         await saveFile({ projectId, path: t.path, content: t.draft }).catch(() => undefined);
       }
       setTabs((prev) => prev.map((t) => ({ ...t, content: t.draft })));
-      const contents = new Map<string, string>();
-      for (const t of tabs) contents.set(t.path, t.draft);
-      const built = buildPreviewHtml(contents, project?.entryFile ?? null);
-      setPreviewHtml(built.html);
+      // Build from the whole project — the same source the live rebuild uses —
+      // reading the latest tabs so an edit made while the save above was in
+      // flight is included rather than overwritten by an older build.
+      const built = buildProjectPreview(tabsRef.current);
+      setPreviewHtml((prevHtml) => (built && built !== prevHtml ? built : prevHtml));
       setPreviewOpen(true);
       // Mobile shows one full-screen panel at a time (editor by default), so
       // the desktop-only `previewOpen` flag would leave the run invisibly
@@ -848,23 +881,53 @@ export default function Ide() {
       { id: ++lineIdRef.current, kind: "cmd", text: `$ run ${activePath}`, ts: Date.now() },
     ]);
     setLastRunTarget(activePath);
+    // A supported web project exposes its Preview on mobile even when Run was
+    // started from an entry point that isn't an .html file (for example a
+    // project's .js/.jsx source): the preview is where that project's output
+    // actually lives, and the mobile layout shows one panel at a time. This
+    // only applies to files the preview builder itself consumes, and only when
+    // a preview genuinely exists — Python, C, Java, SQL and TypeScript-only
+    // projects keep their terminal output in front. It runs here, once the run
+    // is really starting, so a failed save or an already-running process never
+    // moves the panel.
+    if (isNarrow && previewAvailable && isPreviewAssetPath(activePath)) {
+      setMobilePanel("preview");
+    }
     // Started here, finished in runCallbacks → recorded in Run History.
     runContextRef.current = { path: activePath, lang, startedAt: performance.now() };
     await runManager.runSingleFile(
       { projectId, path: activePath, content: activeTab.draft, lang },
       runCallbacks,
     );
-  }, [activePath, activeTab, tabs, project?.entryFile, hasWebPreview, projectId, saveFile, runCallbacks, recordRun, showToast, isNarrow]);
+  }, [activePath, activeTab, tabs, buildProjectPreview, hasWebPreview, project?.entryFile, projectId, saveFile, runCallbacks, recordRun, showToast, isNarrow, previewAvailable]);
 
   const handleRunRef = useRef(handleRun);
   handleRunRef.current = handleRun;
 
   const handleStop = useCallback(() => {
-    runManager.stop();
-    setRunState("stopped");
+    const result = runManager.stop();
+    if (!result.active) return;
+    if (result.terminated) {
+      // An engine cancellation hook ran: the run is ending now and will report
+      // its own final state (still "stopped", with the real exit code).
+      setRunState("stopped");
+      setTerminalLines((prev) => [
+        ...prev.slice(-400),
+        { id: ++lineIdRef.current, kind: "info", text: "[user] Stop requested.", ts: Date.now() },
+      ]);
+      return;
+    }
+    // No cancellation hook for this engine (Pyodide runs on the main thread),
+    // so this is a request the runtime cannot yet honour. Reporting it as
+    // stopped would claim a process ended while it is still executing.
     setTerminalLines((prev) => [
       ...prev.slice(-400),
-      { id: ++lineIdRef.current, kind: "info", text: "[user] Stop requested.", ts: Date.now() },
+      {
+        id: ++lineIdRef.current,
+        kind: "info",
+        text: "[user] Stop requested — this runtime can't be interrupted mid-execution, so the run will end on its own.",
+        ts: Date.now(),
+      },
     ]);
   }, []);
 

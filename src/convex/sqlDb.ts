@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { action, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { requireActiveWorkspace } from "./workspaces";
+import { peekActiveWorkspace, requireActiveWorkspace } from "./workspaces";
 import type { Id } from "./_generated/dataModel";
 
 // Persistent per-project SQLite database (sql.js export bytes in blob storage).
@@ -36,6 +36,31 @@ export const hasDb = internalQuery({
   },
 });
 
+/**
+ * The caller's active workspace id, or null when there is none.
+ *
+ * Actions have no `ctx.db`, so `requireActiveWorkspace`/`peekActiveWorkspace`
+ * cannot be called from them directly — the lookup (and the session identity
+ * it depends on) is delegated to this internal query, exactly like
+ * `importExport.exportProjectZip` delegates to `collectProjectFiles`.
+ */
+export const activeWorkspaceIdForAction = internalQuery({
+  args: {},
+  handler: async (ctx): Promise<{ workspaceId: Id<"workspaces"> | null }> => {
+    const ws = await peekActiveWorkspace(ctx);
+    return { workspaceId: ws?._id ?? null };
+  },
+});
+
+/** As above, but creates/resets the workspace when needed (write path). */
+export const requireWorkspaceIdForAction = internalMutation({
+  args: {},
+  handler: async (ctx): Promise<{ workspaceId: Id<"workspaces"> }> => {
+    const ws = await requireActiveWorkspace(ctx);
+    return { workspaceId: ws._id };
+  },
+});
+
 export const saveDb = action({
   args: {
     projectId: v.id("projects"),
@@ -47,7 +72,12 @@ export const saveDb = action({
     ctx,
     { projectId, dataBase64, size },
   ): Promise<{ ok: boolean }> => {
-    const ws = await requireActiveWorkspace(ctx as never);
+    // Resolve (and authorize) the caller's workspace before storing anything,
+    // so an unauthenticated request never leaves an orphaned blob behind.
+    const { workspaceId } = await ctx.runMutation(
+      internal.sqlDb.requireWorkspaceIdForAction,
+      {},
+    );
     const binary = Uint8Array.from(atob(dataBase64), (c) => c.charCodeAt(0));
     const blobId = await ctx.storage.store(new Blob([binary as BlobPart]));
 
@@ -55,7 +85,7 @@ export const saveDb = action({
       projectId,
       blobId,
       size,
-      workspaceId: ws._id,
+      workspaceId,
     });
     return { ok: true };
   },
@@ -114,10 +144,17 @@ export const loadDbBytes = action({
     ctx,
     { projectId },
   ): Promise<{ dataBase64: string | null }> => {
-    const ws = await requireActiveWorkspace(ctx as never);
+    // Read path: never creates a workspace. The internal query validates that
+    // the project belongs to that workspace, so one user's database can never
+    // be read by another.
+    const { workspaceId } = await ctx.runQuery(
+      internal.sqlDb.activeWorkspaceIdForAction,
+      {},
+    );
+    if (!workspaceId) return { dataBase64: null };
     const rec = await ctx.runQuery(internal.sqlDb.getDbMetaForAction, {
       projectId,
-      workspaceId: ws._id,
+      workspaceId,
     });
     if (!rec) return { dataBase64: null };
     const blob = await ctx.storage.get(rec.blobId);
