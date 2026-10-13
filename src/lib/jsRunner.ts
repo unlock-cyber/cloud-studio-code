@@ -1,6 +1,8 @@
 // JavaScript/TypeScript execution in a dedicated Web Worker (real engine).
 // The worker is terminated on timeout/stop, so runaway code can always be killed.
 
+import { JS_WORKER_SOURCE } from "./jsWorkerSource";
+
 type Sink = (s: string) => void;
 
 export type JsRunResult = {
@@ -14,65 +16,8 @@ export type JsRunHandle = {
   stop: () => void;
 };
 
-const WORKER_SOURCE = `
-self.onmessage = async function (e) {
-  const code = e.data.code;
-  const LINE_OFFSET = 2;
-  const send = function (type, s) { self.postMessage({ type: type, s: String(s) }); };
-  function fmt(v, depth) {
-    depth = depth || 0;
-    try {
-      if (v === null) return "null";
-      if (v === undefined) return "undefined";
-      var t = typeof v;
-      if (t === "string") return depth === 0 ? v : JSON.stringify(v);
-      if (t === "number" || t === "boolean" || t === "bigint") return String(v);
-      if (t === "function") return "[Function: " + (v.name || "anonymous") + "]";
-      if (t === "symbol") return v.toString();
-      if (v instanceof Error) return (v.stack || (v.name + ": " + v.message));
-      if (depth > 3) return Array.isArray(v) ? "[Array]" : "[Object]";
-      if (Array.isArray(v)) {
-        if (v.length > 100) return "[Array(" + v.length + ")]";
-        return "[ " + v.map(function (x) { return fmt(x, depth + 1); }).join(", ") + " ]";
-      }
-      var keys = Object.keys(v);
-      var parts = keys.slice(0, 50).map(function (k) { return k + ": " + fmt(v[k], depth + 1); });
-      if (keys.length > 50) parts.push("...");
-      return "{ " + parts.join(", ") + " }";
-    } catch (e2) { return String(v); }
-  }
-  var console = {
-    log: function () { send("stdout", Array.prototype.map.call(arguments, function (a) { return fmt(a, 0); }).join(" ")); },
-    info: function () { send("stdout", Array.prototype.map.call(arguments, function (a) { return fmt(a, 0); }).join(" ")); },
-    warn: function () { send("stderr", Array.prototype.map.call(arguments, function (a) { return fmt(a, 0); }).join(" ")); },
-    error: function () { send("stderr", Array.prototype.map.call(arguments, function (a) { return fmt(a, 0); }).join(" ")); },
-    debug: function () {},
-    table: function () {},
-    dir: function () {},
-    time: function () {}, timeEnd: function () {}, timeLog: function () {},
-    group: function () {}, groupEnd: function () {}, count: function () {}, assert: function () {}, trace: function () {}
-  };
-  try {
-    var fn = new Function("console", '"use strict";' + code);
-    var result = fn(console);
-    if (result && typeof result.then === "function") {
-      await result;
-    }
-    self.postMessage({ type: "done", exitCode: 0 });
-  } catch (err) {
-    var msg = (err && err.stack) ? String(err.stack) : String(err);
-    // Rewrite stack lines to point at the user's code
-    msg = msg.replace(new RegExp("<anonymous>:(\\\\d+)", "g"), function (m, n) {
-      return "<anonymous>:" + (parseInt(n, 10) - LINE_OFFSET);
-    });
-    send("stderr", msg);
-    self.postMessage({ type: "done", exitCode: 1 });
-  }
-};
-`;
-
 const WORKER_URL = URL.createObjectURL(
-  new Blob([WORKER_SOURCE], { type: "text/javascript" }),
+  new Blob([JS_WORKER_SOURCE], { type: "text/javascript" }),
 );
 
 /** Run JS code in a worker. Returns a handle so long-running code can be stopped. */

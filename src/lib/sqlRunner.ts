@@ -2,16 +2,20 @@
 // rows and real errors. Databases persist per-project via Convex blob storage.
 
 import initSqlJs, { type Database, type SqlJsStatic } from "sql.js";
-
-const WASM_BASE =
-  "https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/";
+// Ship the WebAssembly binary with the app instead of fetching it from a CDN.
+// The bundled sql.js build is the browser flavour, whose glue requests
+// `sql-wasm-browser.wasm`; a CDN pinned to a different sql.js version serves a
+// different filename (or a mismatched binary), and the fetch fails with
+// "both async and sync fetching of the wasm failed". A local, version-matched
+// asset removes that whole class of failure and works offline.
+import sqlWasmUrl from "sql.js/dist/sql-wasm-browser.wasm?url";
 
 let sqlJsPromise: Promise<SqlJsStatic> | null = null;
 
 function ensureSqlJs(): Promise<SqlJsStatic> {
   if (!sqlJsPromise) {
     sqlJsPromise = initSqlJs({
-      locateFile: (file: string) => WASM_BASE + file,
+      locateFile: () => sqlWasmUrl,
     });
   }
   return sqlJsPromise;

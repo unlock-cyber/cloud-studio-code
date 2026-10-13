@@ -643,7 +643,8 @@ export default function Dashboard() {
               <Card
                 key={p._id}
                 aria-busy={openingId === p._id}
-                className="group transition-colors hover:border-primary/40"
+                onClick={openProject(p._id)}
+                className="group cursor-pointer transition-colors hover:border-primary/40"
               >
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-2">
@@ -651,7 +652,10 @@ export default function Dashboard() {
                       className="min-w-0 flex-1 text-left disabled:opacity-70"
                       aria-label={`Open ${p.name}`}
                       disabled={openingId !== null}
-                      onClick={openProject(p._id)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openProject(p._id)();
+                      }}
                     >
                       <p className="truncate font-medium group-hover:text-primary">{p.name}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">
@@ -665,6 +669,7 @@ export default function Dashboard() {
                           size="sm"
                           className="size-7 shrink-0 p-0"
                           aria-label={`Project actions for ${p.name}`}
+                          onClick={(e) => e.stopPropagation()}
                         >
                           <MoreVertical className="size-4" />
                         </Button>

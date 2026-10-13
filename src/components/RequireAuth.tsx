@@ -1,42 +1,28 @@
 import { useConvexAuth } from "convex/react";
-import { useAuthToken } from "@convex-dev/auth/react";
 import { Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router";
+import { resolveAuthGuard } from "@/lib/authGuard";
 
 export function RequireAuth({ children }: { children: ReactNode }) {
-  // Two layers of auth state:
-  //  - the auth provider (a token exists in storage) — flips true immediately
-  //    after signIn() resolves
-  //  - the Convex backend validation of that token — flips true a moment
-  //    later, after a network round-trip
-  // Treating only the second layer as "authenticated" bounces users who have
-  // *just* signed in (guests from the landing page, or users completing OTP)
-  // straight back to /auth during that window. The provider token is the
-  // source of truth for whether a session exists, so we key off it.
-  // A session token in storage is the provider-level truth: non-null right
-  // after signIn() resolves, null when signed out.
-  const providerToken = useAuthToken();
-  const providerLoading = false;
-  const providerAuthenticated = providerToken !== null;
-  const { isLoading: convexLoading, isAuthenticated: convexAuthenticated } =
-    useConvexAuth();
+  // `useConvexAuth()` is loading until the stored session has been read *and*
+  // confirmed by the backend. Gating on that single signal — rather than
+  // treating "no token yet" as signed out — is what keeps a restored session on
+  // its intended route instead of flashing /auth. See src/lib/authGuard.ts.
+  const { isLoading, isAuthenticated } = useConvexAuth();
   const location = useLocation();
 
-  // No session token at all (and the provider finished loading) → signed out.
-  if (!providerLoading && !providerAuthenticated) {
-    const returnTo = `${location.pathname}${location.search}`;
-    return (
-      <Navigate
-        to={`/auth?returnTo=${encodeURIComponent(returnTo)}`}
-        replace
-      />
-    );
+  const decision = resolveAuthGuard({
+    isLoading,
+    isAuthenticated,
+    returnTo: `${location.pathname}${location.search}`,
+  });
+
+  if (decision.kind === "redirect") {
+    return <Navigate to={decision.to} replace />;
   }
 
-  // Token exists but Convex hasn't validated it yet → still loading.
-  // (Never redirect from here: it would strand fresh sign-ins on /auth.)
-  if (providerLoading || (convexLoading && !convexAuthenticated)) {
+  if (decision.kind === "loading") {
     return (
       <main className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex items-center gap-3 text-muted-foreground">
