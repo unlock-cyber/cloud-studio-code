@@ -33,6 +33,15 @@ export type ChangelogEntry = {
 // missing metadata at runtime).
 const CHANGELOG = [
   {
+    path: "/changelog/preview-runtime-update",
+    title: "Preview & Runtime Experience",
+    date: "2026-10-23",
+    badge: "Enhancement",
+    cta: "Read the update",
+    metaDescription:
+      "Cloud Studio Code improves the experience around every run: asynchronous JavaScript completes, SQL databases persist per project, restored sessions open straight to the dashboard, and C/C++ compiler messages explain headers like conio.h.",
+  },
+  {
     path: "/changelog/ide-productivity-update",
     title: "IDE Productivity",
     date: "2026-10-08",
