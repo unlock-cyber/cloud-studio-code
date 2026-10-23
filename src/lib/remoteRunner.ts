@@ -8,6 +8,7 @@ import {
   type LangId,
   type RunResult,
 } from "./languages";
+import { compileDiagnosticNotes } from "./remoteDiagnostics";
 
 const JUDGE0_ENDPOINT = "https://ce.judge0.com/submissions";
 const POLL_INTERVAL_MS = 800;
@@ -180,6 +181,13 @@ export function runRemote(
 
     const fullStderr = [stderr, stderrNote].filter(Boolean).join("\n");
     if (fullStderr) opts.onStderr(fullStderr.replace(/\n$/, ""));
+
+    // Context for a known, confusing compile failure. Emitted last, after the
+    // compiler's own text and the summary line, as an informational line — the
+    // diagnostics are never hidden, reworded or replaced.
+    for (const note of compileDiagnosticNotes(lang, compileOutput)) {
+      opts.onInfo(note);
+    }
 
     return {
       stdout,

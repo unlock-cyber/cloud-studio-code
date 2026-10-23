@@ -442,7 +442,15 @@ export default function Dashboard() {
   const expiringSoon = hoursLeft < 1;
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    // The dashboard is document-flow content: every row reflows to the width it
+    // is given, and nothing here is meant to be wider than the viewport.
+    // Containing stray horizontal overflow at the page boundary keeps a phone
+    // from panning the whole document sideways instead of relying on the global
+    // `body` rule, which clips but leaves the page pannable in some mobile
+    // browsers. `clip` (not `hidden`) creates no scroll container, so vertical
+    // scrolling and desktop layout are unchanged; menus and dialogs are
+    // portalled to <body>, so they are unaffected.
+    <div className="min-h-screen overflow-x-clip bg-background text-foreground">
       {/* Header */}
       <header className="border-b border-border/60">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-2 px-3 sm:gap-3 sm:px-4">
