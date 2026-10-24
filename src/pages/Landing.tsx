@@ -195,39 +195,45 @@ export default function Landing() {
         </div>
       </header>
 
-      {/* Farewell announcement — a minimal editorial closing note, not a hero
-          and not a card: dark wash, one quiet hierarchy, the note and a restrained
-          action stacked under the heading. */}
+      {/* Farewell announcement — a quiet pause, not a card and not a hero:
+          soft burgundy-to-black atmosphere, one editorial stack, a thin divider,
+          with the note and a restrained action under the heading. */}
       <section
         aria-labelledby="farewell-heading"
         className="relative overflow-hidden border-b border-border/60"
       >
+        {/* Soft burgundy-to-black atmosphere that fades into the page background. */}
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              "radial-gradient(760px 280px at 4% 60%, rgba(120,24,24,0.12), transparent 80%)",
+              "radial-gradient(900px 360px at 6% 30%, rgba(110,24,30,0.18), rgba(30,30,34,0.05) 55%, transparent 82%)",
           }}
         />
-        <div className="relative mx-auto max-w-4xl px-4 pb-9 pt-9 sm:px-0 sm:pt-12 sm:pb-12">
-          <h2
-            id="farewell-heading"
-            className="max-w-xl text-[1.7rem] leading-[1.18] font-semibold tracking-tight text-balance sm:text-4xl"
-          >
-            Cloud Studio Code is{" "}
-            <span className="text-[#D0A8A3] dark:text-[#D9B0AB]">
-              taking a pause.
-            </span>
-          </h2>
-          <p className="mt-2.5 max-w-xl text-[#9AA0A6] dark:text-[#A9B0B6] leading-relaxed sm:text-[0.925rem]">
-            Every project has a story. Here&apos;s a little note from the
-            Developer behind this one.
-          </p>
+        <div className="relative mx-auto max-w-4xl px-4 pb-10 pt-9 sm:px-0 sm:pt-12 sm:pb-12">
+          <div className="max-w-xl">
+            <h2
+              id="farewell-heading"
+              className="text-[1.7rem] leading-[1.18] font-semibold tracking-tight sm:text-4xl leading-tight"
+            >
+              Cloud Studio Code is{" "}
+              <span className="text-[#C8938D] dark:text-[#D9A9A0]">
+                taking a pause.
+              </span>
+            </h2>
+            <p className="mt-2.5 text-[#B3BAC1] dark:text-[#CBD3DC] leading-relaxed sm:text-[0.95rem]">
+              Every project has a story. Here&apos;s a little note from the developer behind this one.
+            </p>
+          </div>
+
+          {/* Quiet editorial divider — thin, short, under the note. */}
+          <div className="mx-auto mt-6 max-w-xs border-t border-border/60" aria-hidden="true" />
+
           <div className="mt-5 sm:mt-6">
             <Link
               to="/letter"
-              className="group inline-flex items-center gap-2 text-[#C14F49] hover:text-[#D9645E] focus-visible:ring-2 focus-visible:ring-[#D9645E]/40 focus-visible:outline-none transition-colors dark:text-[#D9B0AB] dark:hover:text-[#E8C0BC]"
+              className="group inline-flex items-center gap-2 text-[#C15050] hover:text-[#D9665E] focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-[#D9665E]/45 transition-colors dark:text-[#D9A89F] dark:hover:text-[#E8B6AA]"
             >
               Read the letter
               <ArrowRight
