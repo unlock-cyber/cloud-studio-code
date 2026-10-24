@@ -154,6 +154,20 @@ export default function Landing() {
     <div className="min-h-screen bg-background text-foreground">
       {/* Nav */}
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur">
+        {/* Compact status note above the navigation: one line, no banner. */}
+        <div className="border-b border-red-500/15 bg-red-500/[0.06]">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-2 gap-y-0.5 px-4 py-1.5 text-center text-[11px] leading-snug sm:text-xs">
+            <span className="text-muted-foreground">
+              Cloud Studio Code is taking a pause.
+            </span>
+            <Link
+              to="/letter"
+              className="font-medium text-red-600 underline-offset-4 transition-colors hover:text-red-500 hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none dark:text-red-400 dark:hover:text-red-300"
+            >
+              Read the letter <span aria-hidden="true">→</span>
+            </Link>
+          </div>
+        </div>
         <div className="mx-auto flex h-14 max-w-6xl items-center px-4">
           <div className="flex min-w-0 items-center gap-2">
             <TerminalSquare className="size-5 shrink-0 text-emerald-500 dark:text-emerald-400" />
