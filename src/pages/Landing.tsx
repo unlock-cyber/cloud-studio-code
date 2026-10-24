@@ -19,7 +19,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { BetaBadge } from "@/components/BetaBadge";
-import { useNavigate, Link } from "react-router";
+import { useNavigate } from "react-router";
+import {
+  FileText,
+} from "lucide-react";
+import { Link } from "react-router";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -195,22 +199,36 @@ export default function Landing() {
         </div>
       </header>
 
-      {/* Farewell announcement — a quiet pause, not a card and not a hero:
-      {/* Short, human farewell note before the hero — plain prose, no card,
-          no banner styling, no glow. It belongs to the page as a quiet line before
-          the product headline. */}
-      <p
-        className="mx-auto max-w-xl text-center text-sm tracking-wide text-muted-foreground/80"
-        id="farewell-note"
-      >
-        <Link
-          to="/letter"
-          className="group inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground/90 transition-colors hover:text-foreground sm:inline-flex"
-        >
-          Cloud Studio Code is taking a pause.
-          <ArrowRight className="size-3 sm:inline hidden" aria-hidden="true" />
-        </Link>
-      </p>
+      {/* A FOUNDATION */}
+      <section aria-labelledby="farewell-heading" className="mx-auto max-w-6xl px-4 sm:px-0">
+        <div className="py-10 sm:py-14">
+          <div className="mx-auto max-w-2xl">
+            <span className="text-[10px] font-semibold tracking-widest uppercase text-[#F2A65A]">
+              <FileText className="inline h-3 w-3 mr-1.5 -translate-y-0.5" style={{ "fill": "currentColor" }} aria-hidden="true" />
+              A NOTE FROM&#xA0;THE DEVELOPER
+            </span>
+            <div className="mt-3 border-t border-transparent sm:border-t-0" />
+            <h2
+              id="farewell-heading"
+              className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl leading-tight"
+            >
+              Cloud Studio Code is taking a pause.
+            </h2>
+            <p className="mt-4 text-base leading-relaxed text-muted-foreground">
+              Every project has a story. Before moving on, I wanted to leave a little note for everyone who visited, explored, or tried building something here.
+            </p>
+            <div className="mt-6 sm:mt-8">
+              <Link
+                to="/letter"
+                className="group inline-flex items-center gap-1.5 rounded-md border border-red-900/20 bg-red-950/5 px-4 py-2 text-sm font-medium text-[#E28B7A] transition-all hover:border-red-500/40 hover:bg-red-950/10 hover:text-[#F2A65A] focus-visible:ring-2 focus-visible:ring-red-500/40 focus-visible:outline-none dark:border-red-300/20 dark:bg-red-300/5 dark:text-[#D9A8A0] dark:hover:border-red-300/35 dark:hover:bg-red-300/10 dark:hover:text-[#EAAA9E]"
+              >
+                Read the letter
+                <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0" aria-hidden="true" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Hero */}
       <section className="relative overflow-hidden">
