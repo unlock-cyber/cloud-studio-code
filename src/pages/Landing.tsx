@@ -19,7 +19,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { BetaBadge } from "@/components/BetaBadge";
-import { FarewellLetter } from "@/components/FarewellLetter";
 import { useNavigate, Link } from "react-router";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -400,6 +399,12 @@ export default function Landing() {
             >
               About
             </button>
+            <Link
+              to="/letter"
+              className="transition-colors hover:text-foreground"
+            >
+              A Letter From the Developer
+            </Link>
             <button
               type="button"
               className="transition-colors hover:text-foreground"
@@ -435,10 +440,6 @@ export default function Landing() {
           </div>
         </div>
       </footer>
-
-      {/* Announcement only: the page above renders untouched and stays
-          interactive again as soon as the letter is dismissed. */}
-      <FarewellLetter />
     </div>
   );
 }
