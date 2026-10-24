@@ -196,50 +196,21 @@ export default function Landing() {
       </header>
 
       {/* Farewell announcement — a quiet pause, not a card and not a hero:
-      {/* Farewell announcement — a cinematic opening moment before the hero:
-          full-width section, soft single-side burgundy glow, one left-aligned
-          editorial stack, restrained outlined CTA. */}
-      <section
-        aria-labelledby="farewell-heading"
-        className="relative overflow-hidden border-b border-border/60"
+      {/* Short, human farewell note before the hero — plain prose, no card,
+          no banner styling, no glow. It belongs to the page as a quiet line before
+          the product headline. */}
+      <p
+        className="mx-auto max-w-xl text-center text-sm tracking-wide text-muted-foreground/80"
+        id="farewell-note"
       >
-        {/* Soft single-side burgundy glow that fades into the existing dark
-            page background — never a solid rectangle or visible gradient band. */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(820px 300px at 3% 20%, rgba(120,28,32,0.20), transparent 78%)",
-          }}
-        />
-        <div className="relative mx-auto max-w-6xl px-4 pb-10 pt-9 sm:px-0 sm:pt-12 sm:pb-12">
-          <h2
-            id="farewell-heading"
-            className="max-w-2xl text-4xl font-semibold leading-tight tracking-tight text-balance sm:text-[4.5rem] sm:leading-[1.05]"
-          >
-            Cloud Studio Code is{" "}
-            <span className="text-[#C8938D] dark:text-[#D9A9A0]">
-              taking a pause.
-            </span>
-          </h2>
-          <p className="mt-3 max-w-xl text-base font-normal leading-relaxed text-muted-foreground sm:text-[0.975rem]">
-            Every project has a story. Here&apos;s a little note from the developer behind this one.
-          </p>
-          <div className="mt-6 sm:mt-7">
-            <Link
-              to="/letter"
-              className="group inline-flex items-center gap-2 rounded-md border border-red-900/25 bg-red-950/[0.03] px-3.5 py-2 text-sm font-medium text-[#C15050] transition-colors hover:border-red-900/40 hover:bg-red-950/[0.07] hover:text-[#D9665E] focus-visible:ring-2 focus-visible:ring-red-900/40 focus-visible:outline-none dark:border-red-300/20 dark:bg-red-300/[0.03] dark:text-[#D9A9A0] dark:hover:border-red-300/35 dark:hover:bg-red-300/[0.07] dark:hover:text-[#E8BCAE]"
-            >
-              Read the letter
-              <ArrowRight
-                className="size-3.5 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
-                aria-hidden="true"
-              />
-            </Link>
-          </div>
-        </div>
-      </section>
+        <Link
+          to="/letter"
+          className="group inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground/90 transition-colors hover:text-foreground sm:inline-flex"
+        >
+          Cloud Studio Code is taking a pause.
+          <ArrowRight className="size-3 sm:inline hidden" aria-hidden="true" />
+        </Link>
+      </p>
 
       {/* Hero */}
       <section className="relative overflow-hidden">
