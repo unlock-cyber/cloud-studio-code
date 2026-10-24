@@ -217,19 +217,21 @@ export default function Landing() {
                   >
                     Cloud Studio Code is<span className="text-[#E18B7A] dark:text-[#EAAA9E]"> taking a pause.</span>
                   </h2>
-                  <p className="mt-3 text-base leading-relaxed text-muted-foreground">
-                    Every project has a story. Before moving on, I wanted to leave a little note for everyone who visited, explored, or tried building something here.
-                  </p>
                 </div>
               </div>
-              <div className="sm:pt-1">
-                <Link
-                  to="/letter"
-                  className="group inline-flex items-center gap-1.5 rounded-md border border-red-900/20 bg-red-950/5 px-4 py-2 text-sm font-medium text-[#E28B7A] transition-all hover:border-red-500/40 hover:bg-red-950/10 hover:text-[#F2A65A] focus-visible:ring-2 focus-visible:ring-red-500/40 focus-visible:outline-none dark:border-red-300/20 dark:bg-red-300/5 dark:text-[#D9A8A0] dark:hover:border-red-300/35 dark:hover:bg-red-300/10 dark:hover:text-[#EAAA9E]"
-                >
-                  Read the letter
-                  <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0" aria-hidden="true" />
-                </Link>
+              <div className="flex items-start sm:pt-1">
+                <span className="hidden sm:block border-l border-border/60 pl-3 pr-3 text-base leading-relaxed text-muted-foreground">
+                  Every project has a story. Before moving on, I wanted to leave a little note for everyone who visited, explored, or tried building something here.
+                </span>
+                <span className="mt-3 sm:mt-0">
+                  <Link
+                    to="/letter"
+                    className="group inline-flex items-center gap-1.5 rounded-md border border-red-900/20 bg-red-950/5 px-4 py-2 text-sm font-medium text-[#E28B7A] transition-all hover:border-red-500/40 hover:bg-red-950/10 hover:text-[#F2A65A] focus-visible:ring-2 focus-visible:ring-red-500/40 focus-visible:outline-none dark:border-red-300/20 dark:bg-red-300/5 dark:text-[#D9A8A0] dark:hover:border-red-300/35 dark:hover:bg-red-300/10 dark:hover:text-[#EAAA9E]"
+                  >
+                    Read the letter
+                    <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0" aria-hidden="true" />
+                  </Link>
+                </span>
               </div>
             </div>
           </div>
