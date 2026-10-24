@@ -220,7 +220,7 @@ export default function Landing() {
                 </div>
               </div>
               <div className="sm:pt-1">
-                <span className="hidden sm:block border-l border-border/60 pl-3 pr-3 text-base leading-relaxed text-muted-foreground">
+                <span className="hidden sm:block border-l border-border/60 pl-4 pr-5 text-base leading-relaxed text-muted-foreground">
                   Every project has a story. Before moving on, I wanted to leave a little note for everyone who visited, explored, or tried building something here.
                 </span>
                 <div className="mt-3 sm:mt-0">
