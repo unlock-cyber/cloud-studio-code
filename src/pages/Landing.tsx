@@ -224,7 +224,7 @@ export default function Landing() {
             <div className="md:col-span-5">
               <p className="max-w-md text-sm leading-relaxed text-muted-foreground sm:text-[15px]">
                 Every project has a story. Here&apos;s a little note from the
-                person behind this one.
+                developer.
               </p>
               <Link
                 to="/letter"
