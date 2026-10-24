@@ -198,6 +198,9 @@ export default function Landing() {
       {/* Farewell announcement — an editorial band that belongs to the page
           rather than a boxed alert: a soft wash, one heading, a quiet note and
           a single outlined action, sitting between the nav and the hero. */}
+      {/* Farewell announcement — one coherent, compact composition below the
+          navigation: a soft burgundy wash, the heading, then the note, then the
+          action, all as one vertical stack rather than separate columns. */}
       <section
         aria-labelledby="farewell-heading"
         className="relative overflow-hidden border-b border-border/60"
@@ -211,33 +214,29 @@ export default function Landing() {
           }}
         />
         <div className="relative mx-auto max-w-6xl px-4 py-9 sm:py-12">
-          <div className="grid gap-6 md:grid-cols-12 md:items-center md:gap-12">
-            <h2
-              id="farewell-heading"
-              className="max-w-2xl text-[1.7rem] leading-[1.15] font-semibold tracking-tight text-balance md:col-span-7 sm:text-4xl"
-            >
-              Cloud Studio Code is{" "}
-              <span className="text-red-800 dark:text-[#E8B4AE]">
-                taking a pause.
-              </span>
-            </h2>
-            <div className="md:col-span-5">
-              <p className="max-w-md text-sm leading-relaxed text-muted-foreground sm:text-[15px]">
-                Every project has a story. Here&apos;s a little note from the
-                developer.
-              </p>
-              <Link
-                to="/letter"
-                className="group mt-5 inline-flex items-center gap-2 rounded-md border border-red-900/25 bg-red-950/[0.04] px-3.5 py-2 text-sm font-medium text-red-900 transition-colors hover:border-red-900/40 hover:bg-red-950/[0.07] focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none dark:border-red-300/20 dark:bg-red-300/[0.04] dark:text-[#E8B4AE] dark:hover:border-red-300/35 dark:hover:bg-red-300/[0.08]"
-              >
-                Read the letter
-                <ArrowRight
-                  className="size-3.5 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
-                  aria-hidden="true"
-                />
-              </Link>
-            </div>
-          </div>
+          <h2
+            id="farewell-heading"
+            className="max-w-2xl text-[1.7rem] leading-[1.15] font-semibold tracking-tight text-balance sm:text-4xl"
+          >
+            Cloud Studio Code is{" "}
+            <span className="text-red-800 dark:text-[#E8B4AE]">
+              taking a pause.
+            </span>
+          </h2>
+          <p className="mt-2.5 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-[15px]">
+            Every project has a story. Here&apos;s a little note from the
+            developer.
+          </p>
+          <Link
+            to="/letter"
+            className="group mt-5 inline-flex items-center gap-2 rounded-md border border-red-900/25 bg-red-950/[0.04] px-3.5 py-2 text-sm font-medium text-red-900 transition-colors hover:border-red-900/40 hover:bg-red-950/[0.07] focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none dark:border-red-300/20 dark:bg-red-300/[0.04] dark:text-[#E8B4AE] dark:hover:border-red-300/35 dark:hover:bg-red-300/[0.08]"
+          >
+            Read the letter
+            <ArrowRight
+              className="size-3.5 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
+              aria-hidden="true"
+            />
+          </Link>
         </div>
       </section>
 
