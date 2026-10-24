@@ -212,7 +212,7 @@ export default function Landing() {
               id="farewell-heading"
               className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl leading-tight"
             >
-              Cloud Studio Code is taking a pause.
+              Cloud Studio Code is<span className="text-[#E18B7A] dark:text-[#EAAA9E]"> taking a pause.</span>
             </h2>
             <p className="mt-4 text-base leading-relaxed text-muted-foreground">
               Every project has a story. Before moving on, I wanted to leave a little note for everyone who visited, explored, or tried building something here.
