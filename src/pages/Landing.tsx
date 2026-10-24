@@ -195,12 +195,9 @@ export default function Landing() {
         </div>
       </header>
 
-      {/* Farewell announcement — an editorial band that belongs to the page
-          rather than a boxed alert: a soft wash, one heading, a quiet note and
-          a single outlined action, sitting between the nav and the hero. */}
-      {/* Farewell announcement — one coherent, compact composition below the
-          navigation: a soft burgundy wash, the heading, then the note, then the
-          action, all as one vertical stack rather than separate columns. */}
+      {/* Farewell announcement — a minimal editorial closing note, not a hero
+          and not a card: dark wash, one quiet hierarchy, the note and a restrained
+          action stacked under the heading. */}
       <section
         aria-labelledby="farewell-heading"
         className="relative overflow-hidden border-b border-border/60"
@@ -210,33 +207,35 @@ export default function Landing() {
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              "radial-gradient(760px 260px at 12% 0%, rgba(153,27,27,0.16), transparent 72%)",
+              "radial-gradient(760px 280px at 4% 60%, rgba(120,24,24,0.12), transparent 80%)",
           }}
         />
-        <div className="relative mx-auto max-w-6xl px-4 py-9 sm:py-12">
+        <div className="relative mx-auto max-w-4xl px-4 pb-9 pt-9 sm:px-0 sm:pt-12 sm:pb-12">
           <h2
             id="farewell-heading"
-            className="max-w-2xl text-[1.7rem] leading-[1.15] font-semibold tracking-tight text-balance sm:text-4xl"
+            className="max-w-xl text-[1.7rem] leading-[1.18] font-semibold tracking-tight text-balance sm:text-4xl"
           >
             Cloud Studio Code is{" "}
-            <span className="text-red-800 dark:text-[#E8B4AE]">
+            <span className="text-[#D0A8A3] dark:text-[#D9B0AB]">
               taking a pause.
             </span>
           </h2>
-          <p className="mt-2.5 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-[15px]">
+          <p className="mt-2.5 max-w-xl text-[#9AA0A6] dark:text-[#A9B0B6] leading-relaxed sm:text-[0.925rem]">
             Every project has a story. Here&apos;s a little note from the
-            developer.
+            Developer behind this one.
           </p>
-          <Link
-            to="/letter"
-            className="group mt-5 inline-flex items-center gap-2 rounded-md border border-red-900/25 bg-red-950/[0.04] px-3.5 py-2 text-sm font-medium text-red-900 transition-colors hover:border-red-900/40 hover:bg-red-950/[0.07] focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none dark:border-red-300/20 dark:bg-red-300/[0.04] dark:text-[#E8B4AE] dark:hover:border-red-300/35 dark:hover:bg-red-300/[0.08]"
-          >
-            Read the letter
-            <ArrowRight
-              className="size-3.5 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
-              aria-hidden="true"
-            />
-          </Link>
+          <div className="mt-5 sm:mt-6">
+            <Link
+              to="/letter"
+              className="group inline-flex items-center gap-2 text-[#C14F49] hover:text-[#D9645E] focus-visible:ring-2 focus-visible:ring-[#D9645E]/40 focus-visible:outline-none transition-colors dark:text-[#D9B0AB] dark:hover:text-[#E8C0BC]"
+            >
+              Read the letter
+              <ArrowRight
+                className="size-3.5 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
+                aria-hidden="true"
+              />
+            </Link>
+          </div>
         </div>
       </section>
 
