@@ -195,40 +195,47 @@ export default function Landing() {
         </div>
       </header>
 
-      {/* Farewell announcement — a section of its own between the navigation
-          and the hero, sized so it reads clearly without pushing the page down. */}
-      <section aria-labelledby="farewell-heading">
-        <div className="mx-auto max-w-6xl px-4 pt-7 pb-1 sm:pt-9 sm:pb-2">
-          <div className="relative overflow-hidden rounded-2xl border border-red-500/20 bg-card px-5 py-7 shadow-[0_0_70px_-45px_rgba(239,68,68,0.9)] sm:px-8 sm:py-9">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0"
-              style={{
-                background:
-                  "radial-gradient(520px 220px at 10% 0%, rgba(239,68,68,0.13), transparent 70%)",
-              }}
-            />
-            <div className="relative">
-              <h2
-                id="farewell-heading"
-                className="text-2xl font-bold tracking-tight text-balance sm:text-3xl"
-              >
-                Cloud Studio Code is taking a pause.
-              </h2>
-              <p className="mt-2.5 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+      {/* Farewell announcement — an editorial band that belongs to the page
+          rather than a boxed alert: a soft wash, one heading, a quiet note and
+          a single outlined action, sitting between the nav and the hero. */}
+      <section
+        aria-labelledby="farewell-heading"
+        className="relative overflow-hidden border-b border-border/60"
+      >
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(760px 260px at 12% 0%, rgba(153,27,27,0.16), transparent 72%)",
+          }}
+        />
+        <div className="relative mx-auto max-w-6xl px-4 py-9 sm:py-12">
+          <div className="grid gap-6 md:grid-cols-12 md:items-center md:gap-12">
+            <h2
+              id="farewell-heading"
+              className="max-w-2xl text-[1.7rem] leading-[1.15] font-semibold tracking-tight text-balance md:col-span-7 sm:text-4xl"
+            >
+              Cloud Studio Code is{" "}
+              <span className="text-red-800 dark:text-[#E8B4AE]">
+                taking a pause.
+              </span>
+            </h2>
+            <div className="md:col-span-5">
+              <p className="max-w-md text-sm leading-relaxed text-muted-foreground sm:text-[15px]">
                 Every project has a story. Here&apos;s a little note from the
                 person behind this one.
               </p>
-              <Button
-                asChild
-                size="lg"
-                className="mt-5 w-full gap-2 bg-red-600 text-white hover:bg-red-500 sm:w-auto"
+              <Link
+                to="/letter"
+                className="group mt-5 inline-flex items-center gap-2 rounded-md border border-red-900/25 bg-red-950/[0.04] px-3.5 py-2 text-sm font-medium text-red-900 transition-colors hover:border-red-900/40 hover:bg-red-950/[0.07] focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none dark:border-red-300/20 dark:bg-red-300/[0.04] dark:text-[#E8B4AE] dark:hover:border-red-300/35 dark:hover:bg-red-300/[0.08]"
               >
-                <Link to="/letter">
-                  Read the letter{" "}
-                  <ArrowRight className="size-4" aria-hidden="true" />
-                </Link>
-              </Button>
+                Read the letter
+                <ArrowRight
+                  className="size-3.5 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
+                  aria-hidden="true"
+                />
+              </Link>
             </div>
           </div>
         </div>
