@@ -201,7 +201,7 @@ export default function Landing() {
 
       {/* A FOUNDATION */}
       <section aria-labelledby="farewell-heading" className="mx-auto max-w-6xl px-4 sm:px-0">
-        <div className="py-10 sm:py-14">
+        <div className="py-7 sm:py-9">
           <div className="mx-auto max-w-2xl">
             <span className="text-[10px] font-semibold tracking-widest uppercase text-[#F2A65A]">
               <FileText className="inline h-3 w-3 mr-1.5 -translate-y-0.5" style={{ "fill": "currentColor" }} aria-hidden="true" />
@@ -210,14 +210,14 @@ export default function Landing() {
             <div className="mt-3 border-t border-transparent sm:border-t-0" />
             <h2
               id="farewell-heading"
-              className="mt-4 text-3xl font-semibold tracking-tight sm:text-5xl leading-tight"
+              className="mt-3 text-3xl font-semibold tracking-tight sm:text-5xl leading-tight"
             >
               Cloud Studio Code is<span className="text-[#E18B7A] dark:text-[#EAAA9E]"> taking a pause.</span>
             </h2>
-            <p className="mt-4 text-base leading-relaxed text-muted-foreground">
+            <p className="mt-3 text-base leading-relaxed text-muted-foreground">
               Every project has a story. Before moving on, I wanted to leave a little note for everyone who visited, explored, or tried building something here.
             </p>
-            <div className="mt-6 sm:mt-8">
+            <div className="mt-4 sm:mt-6">
               <Link
                 to="/letter"
                 className="group inline-flex items-center gap-1.5 rounded-md border border-red-900/20 bg-red-950/5 px-4 py-2 text-sm font-medium text-[#E28B7A] transition-all hover:border-red-500/40 hover:bg-red-950/10 hover:text-[#F2A65A] focus-visible:ring-2 focus-visible:ring-red-500/40 focus-visible:outline-none dark:border-red-300/20 dark:bg-red-300/5 dark:text-[#D9A8A0] dark:hover:border-red-300/35 dark:hover:bg-red-300/10 dark:hover:text-[#EAAA9E]"
