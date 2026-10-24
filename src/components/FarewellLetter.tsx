@@ -11,15 +11,26 @@ import {
 } from "@/components/ui/dialog";
 
 // The homepage renders first and the letter follows shortly after, so the
-// announcement never blocks the page from becoming visible. It is held in
-// component state only: no storage, so every fresh visit shows it again.
+// announcement never blocks the page from becoming visible.
 const ANNOUNCEMENT_DELAY_MS = 700;
+
+// Landing unmounts whenever the visitor leaves the homepage, which resets any
+// component state and used to replay the letter on the next internal visit.
+// This flag lives at module scope instead: it survives client-side route
+// changes for the current page load and is re-evaluated on a full reload. It
+// is set only when the letter is actually presented, so StrictMode's
+// mount/unmount/mount cycle cannot suppress it.
+let shownThisPageLoad = false;
 
 export function FarewellLetter() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setOpen(true), ANNOUNCEMENT_DELAY_MS);
+    if (shownThisPageLoad) return;
+    const timer = window.setTimeout(() => {
+      shownThisPageLoad = true;
+      setOpen(true);
+    }, ANNOUNCEMENT_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, []);
 
