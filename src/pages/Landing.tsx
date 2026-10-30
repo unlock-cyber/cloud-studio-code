@@ -15,13 +15,11 @@ import {
   HardDrive,
   Loader2,
 } from "lucide-react";
-
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ThemeToggle } from "@/components/ThemeToggle";import { BetaBadge } from "@/components/BetaBadge";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { BetaBadge } from "@/components/BetaBadge";
 import { useNavigate, Link } from "react-router";
-import { useQuery } from "convex/react";
-
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -88,7 +86,7 @@ export default function Landing() {
     path: "/",
     structuredData: webSiteSchema(),
   });
-  const { isAuthenticated } = useConvexAuth();
+  const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const user = useQuery(api.users.currentUser);
   const { signIn } = useAuthActions();
   const [guestBusy, setGuestBusy] = useState(false);
@@ -389,7 +387,8 @@ export default function Landing() {
           <div className="inline-flex items-start gap-1 text-sm font-semibold text-foreground">
             Cloud Studio Code
             <BetaBadge className="-translate-y-0.5" />
-          </div>            <nav
+          </div>
+          <nav
             aria-label="Footer"
             className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground"
           >
@@ -397,7 +396,8 @@ export default function Landing() {
               type="button"
               className="transition-colors hover:text-foreground"
               onClick={() => navigate("/about")}
-            >              About
+            >
+              About
             </button>
             <button
               type="button"
