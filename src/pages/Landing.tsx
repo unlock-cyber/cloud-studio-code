@@ -15,15 +15,12 @@ import {
   HardDrive,
   Loader2,
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { BetaBadge } from "@/components/BetaBadge";
-import { useNavigate } from "react-router";
-import {
-  FileText,
-} from "lucide-react";
-import { Link } from "react-router";
+import { useNavigate, Link } from "react-router";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAuthActions } from "@convex-dev/auth/react";
@@ -198,45 +195,6 @@ export default function Landing() {
           </nav>
         </div>
       </header>
-
-      {/* A FOUNDATION */}
-      <section aria-labelledby="farewell-heading" className="mx-auto max-w-6xl px-4 sm:px-0">
-        <div className="py-7 sm:py-9">
-          <div className="mx-auto max-w-6xl">
-            <div className="grid gap-4 sm:grid-cols-2 sm:gap-8">
-              <div className="sm:pr-8">
-                <div className="mx-auto max-w-2xl">
-                  <span className="text-[10px] font-semibold tracking-widest uppercase text-[#F2A65A]">
-                    <FileText className="inline h-3 w-3 mr-1.5 -translate-y-0.5" style={{ "fill": "currentColor" }} aria-hidden="true" />
-                    A NOTE FROM&#xA0;THE DEVELOPER
-                  </span>
-                  <div className="mt-2 border-t border-transparent sm:border-t-0" />
-                  <h2
-                    id="farewell-heading"
-                    className="mt-3 text-3xl font-semibold tracking-tight sm:text-5xl leading-tight"
-                  >
-                    Cloud Studio Code is<span className="text-[#E18B7A] dark:text-[#EAAA9E]"> taking a pause.</span>
-                  </h2>
-                </div>
-              </div>
-              <div className="sm:pt-1">
-                <span className="hidden sm:block border-l border-border/60 pl-4 pr-5 text-base leading-relaxed text-muted-foreground">
-                  Every project has a story. Before moving on, I wanted to leave a little note for everyone who visited, explored, or tried building something here.
-                </span>
-                <div className="mt-3 sm:mt-0">
-                  <Link
-                    to="/letter"
-                    className="group inline-flex items-center gap-1.5 rounded-md border border-red-900/20 bg-red-950/5 px-4 py-2 text-sm font-medium text-[#E28B7A] transition-all hover:border-red-500/40 hover:bg-red-950/10 hover:text-[#F2A65A] focus-visible:ring-2 focus-visible:ring-red-500/40 focus-visible:outline-none dark:border-red-300/20 dark:bg-red-300/5 dark:text-[#D9A8A0] dark:hover:border-red-300/35 dark:hover:bg-red-300/10 dark:hover:text-[#EAAA9E]"
-                  >
-                    Read the letter
-                    <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0" aria-hidden="true" />
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Hero */}
       <section className="relative overflow-hidden">
@@ -430,8 +388,7 @@ export default function Landing() {
           <div className="inline-flex items-start gap-1 text-sm font-semibold text-foreground">
             Cloud Studio Code
             <BetaBadge className="-translate-y-0.5" />
-          </div>
-          <nav
+          </div>            <nav
             aria-label="Footer"
             className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground"
           >
